@@ -2,6 +2,7 @@
 
 Import concrete models here so Base.metadata.create_all() picks them up.
 """
+from app.models.catalog import Template, TemplateCategory  # noqa: F401
 from app.models.identity import (  # noqa: F401
     AuthIdentity,
     Permission,
@@ -9,4 +10,12 @@ from app.models.identity import (  # noqa: F401
     RolePermission,
     User,
     UserRole,
+)
+from app.models.resources import (  # noqa: F401
+    GroupAssignment,
+    MetadataDefinition,
+    Resource,
+    ResourceGroup,
+    ResourceGroupMember,
+    ResourceMetadata,
 )

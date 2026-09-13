@@ -1,6 +1,6 @@
-"""FastAPI application factory (Stage 1: identity/auth/RBAC wired).
+"""FastAPI application factory (Stage 2: + catalog/resources/groups wired).
 
-Later stages mount catalog/resource/usage/beacon/stats routers and /admin here.
+Later stages mount usage/beacon/stats routers and /admin here.
 """
 from contextlib import asynccontextmanager
 
@@ -58,16 +58,28 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["system"])
     async def root() -> dict[str, str]:
-        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 1"}
+        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 2"}
 
     from app.api.v1 import auth as auth_router
+    from app.api.v1 import categories as categories_router
+    from app.api.v1 import groups as groups_router
+    from app.api.v1 import metadata as metadata_router
+    from app.api.v1 import resources as resources_router
     from app.api.v1 import roles as roles_router
+    from app.api.v1 import templates as templates_router
     from app.api.v1 import users as users_router
 
     app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(users_router.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(roles_router.router, prefix="/api/v1/roles", tags=["roles"])
-    # Stage 2+: categories/templates/resources/groups/grants routers
+    app.include_router(categories_router.router, prefix="/api/v1/categories", tags=["categories"])
+    app.include_router(templates_router.router, prefix="/api/v1/templates", tags=["templates"])
+    app.include_router(resources_router.router, prefix="/api/v1/resources", tags=["resources"])
+    app.include_router(
+        metadata_router.router, prefix="/api/v1/metadata-definitions", tags=["metadata"]
+    )
+    app.include_router(groups_router.router, prefix="/api/v1/resource-groups", tags=["groups"])
+    # Stage 3+: grants router; Stage 4+: usages; Stage 5+: beacons/processors
     # Stage 8: mount sqladmin Admin here.
     return app
 

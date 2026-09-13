@@ -16,9 +16,10 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 1 done** (identity: users/roles/permissions, JWT access+refresh,
-`LocalProvider` + `BusinessSSOProvider` stub, `require_permission` gates, seed admin/operator).
-Next: **Stage 2 — Catalog** (categories, templates, resources, metadata, groups).
+See `plan.md §6`. Current: **Stage 2 done** (catalog: categories incl. python/json,
+templates with versioning, resources + reusable metadata defs + per-resource values,
+groups with members + user/role assignments; seed Moto G6 + lab-phones).
+Next: **Stage 3 — Access Control** (template/resource grants, `services/rbac.py`, group resolution).
 
 ## Notes
 

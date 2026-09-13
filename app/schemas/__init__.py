@@ -1,4 +1,12 @@
 """Pydantic v2 schemas (per domain)."""
+from app.schemas.catalog import (  # noqa: F401
+    CategoryCreate,
+    CategoryRead,
+    CategoryUpdate,
+    TemplateCreate,
+    TemplateRead,
+    TemplateUpdate,
+)
 from app.schemas.identity import (  # noqa: F401
     MeRead,
     PermissionRead,
@@ -9,4 +17,17 @@ from app.schemas.identity import (  # noqa: F401
     UserCreate,
     UserRead,
     UserUpdate,
+)
+from app.schemas.resources import (  # noqa: F401
+    AssignmentCreate,
+    AssignmentRead,
+    GroupCreate,
+    GroupRead,
+    MemberAdd,
+    MetadataDefCreate,
+    MetadataDefRead,
+    MetadataSet,
+    ResourceCreate,
+    ResourceRead,
+    ResourceUpdate,
 )
