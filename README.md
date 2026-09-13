@@ -16,10 +16,12 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 2 done** (catalog: categories incl. python/json,
-templates with versioning, resources + reusable metadata defs + per-resource values,
-groups with members + user/role assignments; seed Moto G6 + lab-phones).
-Next: **Stage 3 — Access Control** (template/resource grants, `services/rbac.py`, group resolution).
+See `plan.md §6`. Current: **Stage 3 done** (object grants: template/resource grant
+models + admin `/grants` routers, `services/rbac.py` evaluator —
+superuser → permission code → direct/role/group grant, deny by default;
+reads filtered to granted objects, `GET /templates/{id}/fetch` needs use grant;
+seed grants operator role → hello.py + lab-phones).
+Next: **Stage 4 — Usage Layer + Limits** (modes, usages, voucher flow, limit checks).
 
 ## Notes
 

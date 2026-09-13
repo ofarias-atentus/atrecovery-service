@@ -1,9 +1,11 @@
-"""Idempotent dev/demo seed (Stages 1-2).
+"""Idempotent dev/demo seed (Stages 1-3).
 
 Stage 1: permissions, roles (admin/operator), users (admin/admin123,
 operator/operator123) with local auth identities.
 Stage 2: template categories (python/json), hello.py template, Moto G6
 resource + metadata, lab-phones group assigned to the operator role.
+Stage 3: object grants — operator role can view/use hello.py and the
+lab-phones group (hence its member Moto G6).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
 """
@@ -17,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.db.session import get_session_factory, init_db
 from app.models.catalog import Template, TemplateCategory
+from app.models.grants import ResourceGrant, TemplateGrant
 from app.models.identity import AuthIdentity, Permission, Role, RolePermission, User, UserRole
 from app.models.resources import (
     GroupAssignment,
@@ -134,11 +137,13 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
             )
     await db.commit()
     await seed_catalog(db)
+    await seed_grants(db)
     return {
         "permissions": len(PERMISSION_DEFS),
         "roles": len(ROLE_DEFS),
         "users": len(USER_DEFS),
         "categories": len(CATEGORY_DEFS),
+        "grants": 2,
     }
 
 
@@ -293,6 +298,50 @@ async def seed_catalog(db: AsyncSession) -> None:
                     created_by=admin.id,
                 )
             )
+    await db.commit()
+
+
+async def seed_grants(db: AsyncSession) -> None:
+    """Idempotent grant seed (Stage 3): operator role → hello.py + lab-phones."""
+    operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
+    hello = (
+        await db.execute(select(Template).where(Template.name == "hello.py"))
+    ).scalar_one()
+    lab = (
+        await db.execute(select(ResourceGroup).where(ResourceGroup.name == "lab-phones"))
+    ).scalar_one()
+    tg = (
+        await db.execute(
+            select(TemplateGrant).where(
+                TemplateGrant.template_id == hello.id,
+                TemplateGrant.principal_type == "role",
+                TemplateGrant.principal_id == operator_role.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if tg is None:
+        db.add(
+            TemplateGrant(
+                template_id=hello.id, principal_type="role",
+                principal_id=operator_role.id, can_view=True, can_use=True,
+            )
+        )
+    rg = (
+        await db.execute(
+            select(ResourceGrant).where(
+                ResourceGrant.group_id == lab.id,
+                ResourceGrant.principal_type == "role",
+                ResourceGrant.principal_id == operator_role.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if rg is None:
+        db.add(
+            ResourceGrant(
+                group_id=lab.id, principal_type="role",
+                principal_id=operator_role.id, can_view=True, can_use=True,
+            )
+        )
     await db.commit()
 
 

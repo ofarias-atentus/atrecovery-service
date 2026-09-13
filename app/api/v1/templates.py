@@ -1,6 +1,7 @@
 """Templates router (retrieve/maintain/categorize; execution is out-of-scope).
 
-Read: template:view. Write: template:manage.
+Read: template:view code + object grant (direct/role/group). Fetch:
+template:use code + use grant. Write: template:manage.
 DELETE is a soft deactivate (is_active=False) to preserve usage history.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,11 +12,14 @@ from app.core.deps import require_permission
 from app.db.session import get_db
 from app.models.catalog import Template, TemplateCategory
 from app.models.identity import User
-from app.schemas.catalog import TemplateCreate, TemplateRead, TemplateUpdate
+from app.schemas.catalog import TemplateCreate, TemplateFetch, TemplateRead, TemplateUpdate
+from app.services.rbac import granted_template_ids, require_template_access
 
 router = APIRouter()
 VIEW = require_permission("template:view")
 MANAGE = require_permission("template:manage")
+VIEW_GRANT = require_template_access("view")
+USE_GRANT = require_template_access("use")
 
 
 def _to_read(t: Template) -> TemplateRead:
@@ -34,33 +38,39 @@ def _to_read(t: Template) -> TemplateRead:
     )
 
 
-@router.get("", response_model=list[TemplateRead], summary="List templates")
+@router.get("", response_model=list[TemplateRead], summary="List granted templates")
 async def list_templates(
     category_id: int | None = None,
     include_inactive: bool = False,
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(VIEW),
+    user: User = Depends(VIEW),
 ) -> list[TemplateRead]:
     stmt = select(Template).order_by(Template.name, Template.version)
     if category_id is not None:
         stmt = stmt.where(Template.category_id == category_id)
     if not include_inactive:
         stmt = stmt.where(Template.is_active.is_(True))
+    if (allowed := await granted_template_ids(db, user, "view")) is not None:
+        if not allowed:
+            return []
+        stmt = stmt.where(Template.id.in_(allowed))
     result = await db.execute(stmt.limit(limit).offset(offset))
     return [_to_read(t) for t in result.scalars().all()]
 
 
 @router.get("/{template_id}", response_model=TemplateRead, summary="Get template")
-async def get_template(
-    template_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(VIEW)
-) -> TemplateRead:
-    result = await db.execute(select(Template).where(Template.id == template_id))
-    t = result.scalar_one_or_none()
-    if t is None:
-        raise HTTPException(status_code=404, detail="template not found")
+async def get_template(t: Template = Depends(VIEW_GRANT)) -> TemplateRead:
     return _to_read(t)
+
+
+@router.get("/{template_id}/fetch", response_model=TemplateFetch, summary="Fetch template content")
+async def fetch_template(t: Template = Depends(USE_GRANT)) -> Template:
+    # Stage 4 adds usage-limit checks, Stage 6 activity logging.
+    if not t.is_active:
+        raise HTTPException(status_code=404, detail="template not found")
+    return t
 
 
 @router.post(

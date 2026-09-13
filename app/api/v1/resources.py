@@ -1,7 +1,7 @@
 """Resources router + per-resource metadata attach/detach.
 
-Read: resource:view. Write: resource:manage.
-DELETE is a soft deactivate (is_active=False) to preserve usage history.
+Read: resource:view code + object grant (direct or via granted group).
+Write: resource:manage. DELETE is a soft deactivate (is_active=False).
 """
 from typing import Any
 
@@ -14,10 +14,12 @@ from app.db.session import get_db
 from app.models.identity import User
 from app.models.resources import MetadataDefinition, Resource, ResourceMetadata
 from app.schemas.resources import MetadataSet, ResourceCreate, ResourceRead, ResourceUpdate
+from app.services.rbac import require_resource_access, resource_access_map
 
 router = APIRouter()
 VIEW = require_permission("resource:view")
 MANAGE = require_permission("resource:manage")
+VIEW_GRANT = require_resource_access("view")
 
 
 def _to_read(r: Resource) -> ResourceRead:
@@ -43,26 +45,28 @@ async def _get_or_404(db: AsyncSession, resource_id: int) -> Resource:
     return r
 
 
-@router.get("", response_model=list[ResourceRead], summary="List resources")
+@router.get("", response_model=list[ResourceRead], summary="List granted resources")
 async def list_resources(
     include_inactive: bool = False,
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(VIEW),
+    user: User = Depends(VIEW),
 ) -> list[ResourceRead]:
     stmt = select(Resource).order_by(Resource.id)
     if not include_inactive:
         stmt = stmt.where(Resource.is_active.is_(True))
+    if (allowed := await resource_access_map(db, user, "view")) is not None:
+        if not allowed:
+            return []
+        stmt = stmt.where(Resource.id.in_(allowed))
     result = await db.execute(stmt.limit(limit).offset(offset))
     return [_to_read(r) for r in result.scalars().all()]
 
 
 @router.get("/{resource_id}", response_model=ResourceRead, summary="Get resource with metadata")
-async def get_resource(
-    resource_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(VIEW)
-) -> ResourceRead:
-    return _to_read(await _get_or_404(db, resource_id))
+async def get_resource(r: Resource = Depends(VIEW_GRANT)) -> ResourceRead:
+    return _to_read(r)
 
 
 @router.post(
@@ -113,10 +117,7 @@ async def delete_resource(
 
 
 @router.get("/{resource_id}/metadata", summary="Get resource metadata dict")
-async def get_metadata(
-    resource_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(VIEW)
-) -> dict[str, Any]:
-    r = await _get_or_404(db, resource_id)
+async def get_metadata(r: Resource = Depends(VIEW_GRANT)) -> dict[str, Any]:
     return {e.definition.key: e.value for e in r.metadata_entries}
 
 

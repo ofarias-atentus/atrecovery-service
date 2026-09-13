@@ -56,3 +56,15 @@ class TemplateRead(BaseModel):
     created_by: int | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class TemplateFetch(BaseModel):
+    """Payload returned by GET /templates/{id}/fetch (needs template:use + use grant)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    version: int
+    content: str
+    input_schema: dict[str, Any] | None = None
