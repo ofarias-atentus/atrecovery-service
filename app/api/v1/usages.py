@@ -4,7 +4,7 @@ POST needs ``template:use`` + a use grant (checked in the service, 403) and
 passes active usage limits (429 when exhausted). Listing/detail is scoped:
 non-admins only see their own usages.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.models.beacons import ExecutionResult
 from app.models.identity import User
 from app.models.usage import ExecutionMode, TemplateUsage
 from app.schemas.usage import UsageCreate, UsageRead, UsageStatusRead
+from app.services.activity import TEMPLATE_USE, client_ip, log_activity
 from app.services.usage_svc import create_usage
 
 router = APIRouter()
@@ -55,10 +56,17 @@ async def _can_see(db: AsyncSession, user: User, u: TemplateUsage) -> bool:
 )
 async def post_usage(
     body: UsageCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(USE),
 ) -> UsageRead:
     usage = await create_usage(db, user, body)
+    await log_activity(
+        db, action=TEMPLATE_USE, user_id=user.id,
+        entity_type="usage", entity_id=usage.id,
+        meta={"template_id": usage.template_id, "mode": body.mode, "resource_id": usage.resource_id},
+        ip=client_ip(request),
+    )
     return _to_read(usage, await _mode_map(db))
 
 

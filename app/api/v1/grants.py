@@ -5,7 +5,7 @@ same for ``/grants/resources``. Guards: ``admin:manage``; principals must
 exist (user/role/group rows); no duplicate grant for the same target +
 principal (409).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.schemas.grants import (
     TemplateGrantCreate,
     TemplateGrantRead,
 )
+from app.services.activity import GRANT_CHANGED, client_ip, log_activity
 
 router = APIRouter()
 ADMIN = require_admin()
@@ -47,7 +48,10 @@ async def _check_principal(db: AsyncSession, principal_type: str, principal_id: 
     summary="Grant template access to a principal",
 )
 async def create_template_grant(
-    body: TemplateGrantCreate, db: AsyncSession = Depends(get_db), _: User = Depends(ADMIN)
+    body: TemplateGrantCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
 ) -> TemplateGrant:
     if (
         await db.execute(select(Template.id).where(Template.id == body.template_id))
@@ -67,6 +71,13 @@ async def create_template_grant(
     db.add(g)
     await db.commit()
     await db.refresh(g)
+    await log_activity(
+        db, action=GRANT_CHANGED, user_id=user.id,
+        entity_type="template_grant", entity_id=g.id,
+        meta={"op": "created", "template_id": g.template_id,
+              "principal_type": g.principal_type, "principal_id": g.principal_id},
+        ip=client_ip(request),
+    )
     return g
 
 
@@ -88,13 +99,22 @@ async def list_template_grants(
     "/templates/{grant_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete template grant"
 )
 async def delete_template_grant(
-    grant_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(ADMIN)
+    grant_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
 ) -> None:
     g = (await db.execute(select(TemplateGrant).where(TemplateGrant.id == grant_id))).scalar_one_or_none()
     if g is None:
         raise HTTPException(status_code=404, detail="grant not found")
+    meta = {"op": "deleted", "template_id": g.template_id,
+            "principal_type": g.principal_type, "principal_id": g.principal_id}
     await db.delete(g)
     await db.commit()
+    await log_activity(
+        db, action=GRANT_CHANGED, user_id=user.id,
+        entity_type="template_grant", entity_id=grant_id, meta=meta, ip=client_ip(request),
+    )
 
 
 # ---- resource grants ----
@@ -107,7 +127,10 @@ async def delete_template_grant(
     summary="Grant resource/group access to a principal",
 )
 async def create_resource_grant(
-    body: ResourceGrantCreate, db: AsyncSession = Depends(get_db), _: User = Depends(ADMIN)
+    body: ResourceGrantCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
 ) -> ResourceGrant:
     if body.resource_id is not None and (
         await db.execute(select(Resource.id).where(Resource.id == body.resource_id))
@@ -139,6 +162,13 @@ async def create_resource_grant(
     db.add(g)
     await db.commit()
     await db.refresh(g)
+    await log_activity(
+        db, action=GRANT_CHANGED, user_id=user.id,
+        entity_type="resource_grant", entity_id=g.id,
+        meta={"op": "created", "resource_id": g.resource_id, "group_id": g.group_id,
+              "principal_type": g.principal_type, "principal_id": g.principal_id},
+        ip=client_ip(request),
+    )
     return g
 
 
@@ -163,10 +193,19 @@ async def list_resource_grants(
     "/resources/{grant_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete resource grant"
 )
 async def delete_resource_grant(
-    grant_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(ADMIN)
+    grant_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
 ) -> None:
     g = (await db.execute(select(ResourceGrant).where(ResourceGrant.id == grant_id))).scalar_one_or_none()
     if g is None:
         raise HTTPException(status_code=404, detail="grant not found")
+    meta = {"op": "deleted", "resource_id": g.resource_id, "group_id": g.group_id,
+            "principal_type": g.principal_type, "principal_id": g.principal_id}
     await db.delete(g)
     await db.commit()
+    await log_activity(
+        db, action=GRANT_CHANGED, user_id=user.id,
+        entity_type="resource_grant", entity_id=grant_id, meta=meta, ip=client_ip(request),
+    )

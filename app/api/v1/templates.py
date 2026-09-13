@@ -4,7 +4,7 @@ Read: template:view code + object grant (direct/role/group). Fetch:
 template:use code + use grant. Write: template:manage.
 DELETE is a soft deactivate (is_active=False) to preserve usage history.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.catalog import Template, TemplateCategory
 from app.models.identity import User
 from app.schemas.catalog import TemplateCreate, TemplateFetch, TemplateRead, TemplateUpdate
+from app.services.activity import TEMPLATE_FETCH, client_ip, log_activity
 from app.services.rbac import granted_template_ids, require_template_access
 from app.services.usage_svc import LimitExceeded, check_limits
 
@@ -68,6 +69,7 @@ async def get_template(t: Template = Depends(VIEW_GRANT)) -> TemplateRead:
 
 @router.get("/{template_id}/fetch", response_model=TemplateFetch, summary="Fetch template content")
 async def fetch_template(
+    request: Request,
     t: Template = Depends(USE_GRANT),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -79,6 +81,10 @@ async def fetch_template(
         await check_limits(db, user, t.id)
     except LimitExceeded as e:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e)) from e
+    await log_activity(
+        db, action=TEMPLATE_FETCH, user_id=user.id,
+        entity_type="template", entity_id=t.id, ip=client_ip(request),
+    )
     return t
 
 

@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["system"])
     async def root() -> dict[str, str]:
-        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 5"}
+        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 6"}
 
     from app.api.v1 import auth as auth_router
     from app.api.v1 import beacons as beacons_router
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     from app.api.v1 import grants as grants_router
     from app.api.v1 import groups as groups_router
     from app.api.v1 import limits as limits_router
+    from app.api.v1 import logs as logs_router
     from app.api.v1 import metadata as metadata_router
     from app.api.v1 import modes as modes_router
     from app.api.v1 import processors as processors_router
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(limits_router.router, prefix="/api/v1/usage-limits", tags=["limits"])
     app.include_router(processors_router.router, prefix="/api/v1/processors", tags=["processors"])
     app.include_router(beacons_router.router, prefix="/api/v1/beacons", tags=["beacons"])
+    app.include_router(logs_router.router, prefix="/api/v1/activity-logs", tags=["activity"])
     # Stage 8: mount sqladmin Admin here.
     return app
 

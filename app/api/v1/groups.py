@@ -2,7 +2,7 @@
 
 Read: resource:view. Write: resource:manage.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.schemas.resources import (
     GroupRead,
     MemberAdd,
 )
+from app.services.activity import GROUP_CHANGED, client_ip, log_activity
 
 router = APIRouter()
 VIEW = require_permission("resource:view")
@@ -86,7 +87,10 @@ async def get_group(
     "", response_model=GroupRead, status_code=status.HTTP_201_CREATED, summary="Create group"
 )
 async def create_group(
-    body: GroupCreate, db: AsyncSession = Depends(get_db), _: User = Depends(MANAGE)
+    body: GroupCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(MANAGE),
 ) -> GroupRead:
     dup = await db.execute(select(ResourceGroup).where(ResourceGroup.name == body.name))
     if dup.scalar_one_or_none() is not None:
@@ -94,12 +98,21 @@ async def create_group(
     g = ResourceGroup(name=body.name, description=body.description)
     db.add(g)
     await db.commit()
+    await log_activity(
+        db, action=GROUP_CHANGED, user_id=user.id,
+        entity_type="resource_group", entity_id=g.id,
+        meta={"op": "created", "name": g.name}, ip=client_ip(request),
+    )
     return _to_read(await _get_or_404(db, g.id))
 
 
 @router.post("/{group_id}/members", response_model=GroupRead, summary="Add resource to group")
 async def add_member(
-    group_id: int, body: MemberAdd, db: AsyncSession = Depends(get_db), _: User = Depends(MANAGE)
+    group_id: int,
+    body: MemberAdd,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(MANAGE),
 ) -> GroupRead:
     g = await _get_or_404(db, group_id)
     r = (await db.execute(select(Resource).where(Resource.id == body.resource_id))).scalar_one_or_none()
@@ -113,6 +126,11 @@ async def add_member(
     if link.scalar_one_or_none() is None:
         db.add(ResourceGroupMember(group_id=g.id, resource_id=r.id))
         await db.commit()
+        await log_activity(
+            db, action=GROUP_CHANGED, user_id=user.id,
+            entity_type="resource_group", entity_id=g.id,
+            meta={"op": "member_added", "resource_id": r.id}, ip=client_ip(request),
+        )
     return _to_read(await _fresh_group(db, group_id))
 
 
@@ -122,7 +140,11 @@ async def add_member(
     summary="Remove resource from group",
 )
 async def remove_member(
-    group_id: int, resource_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(MANAGE)
+    group_id: int,
+    resource_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(MANAGE),
 ) -> GroupRead:
     link = await db.execute(
         select(ResourceGroupMember).where(
@@ -134,6 +156,11 @@ async def remove_member(
         raise HTTPException(status_code=404, detail="membership not found")
     await db.delete(obj)
     await db.commit()
+    await log_activity(
+        db, action=GROUP_CHANGED, user_id=user.id,
+        entity_type="resource_group", entity_id=group_id,
+        meta={"op": "member_removed", "resource_id": resource_id}, ip=client_ip(request),
+    )
     return _to_read(await _fresh_group(db, group_id))
 
 
@@ -141,6 +168,7 @@ async def remove_member(
 async def add_assignment(
     group_id: int,
     body: AssignmentCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(MANAGE),
 ) -> GroupRead:
@@ -163,6 +191,13 @@ async def add_assignment(
             )
         )
         await db.commit()
+        await log_activity(
+            db, action=GROUP_CHANGED, user_id=user.id,
+            entity_type="resource_group", entity_id=g.id,
+            meta={"op": "assigned", "principal_type": body.principal_type,
+                  "principal_id": body.principal_id},
+            ip=client_ip(request),
+        )
     return _to_read(await _fresh_group(db, group_id))
 
 
@@ -171,15 +206,23 @@ async def add_assignment(
 )
 async def remove_assignment(
     assignment_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(MANAGE),
+    user: User = Depends(MANAGE),
 ) -> None:
     result = await db.execute(select(GroupAssignment).where(GroupAssignment.id == assignment_id))
     obj = result.scalar_one_or_none()
     if obj is None:
         raise HTTPException(status_code=404, detail="assignment not found")
+    meta = {"op": "unassigned", "group_id": obj.group_id,
+            "principal_type": obj.principal_type, "principal_id": obj.principal_id}
+    group_id = obj.group_id
     await db.delete(obj)
     await db.commit()
+    await log_activity(
+        db, action=GROUP_CHANGED, user_id=user.id,
+        entity_type="resource_group", entity_id=group_id, meta=meta, ip=client_ip(request),
+    )
 
 
 @router.get(

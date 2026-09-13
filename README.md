@@ -16,13 +16,12 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 5 done** (beacons: `processor_services` with
-sha256 token auth via `X-Processor-Token` + `get_processor`, `execution_results`
-one-to-many per usage; `POST /beacons` processor-only with `beacon:report` scope,
-drives usage ok→done/error→failed/partial→running; `GET /beacons` JWT-gated on
-`template:view` scoped to own usages; `/processors` admin CRUD with shown-once
-token; usage status embeds beacon count/latest; seed lab-runner).
-Next: **Stage 6 — Activity Tracking** (append-only logs from fetch/usage/beacon/grant changes).
+See `plan.md §6`. Current: **Stage 6 done** (activity tracking: append-only
+`activity_logs` + `services/activity.py`; hooks on template fetch, usage relay,
+beacon ingest (user NULL, processor in meta), grant create/delete and group
+member/assignment changes — all with client IP + meta JSON; `GET /activity-logs`
+admin-only, no write routes).
+Next: **Stage 7 — Statistics Engine** (definitions, internal resolvers over logs/usages/beacons, external fetch).
 
 ## Notes
 

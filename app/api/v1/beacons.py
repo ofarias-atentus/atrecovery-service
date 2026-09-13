@@ -4,7 +4,7 @@ POST requires the ``beacon:report`` scope and moves the usage lifecycle
 (ok → done, error → failed, partial → running). GET needs ``template:view``
 and is scoped to the caller's own usages unless admin.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.models.beacons import ExecutionResult, ProcessorService
 from app.models.identity import User
 from app.models.usage import TemplateUsage
 from app.schemas.beacons import BEACON_TO_USAGE, BeaconCreate, BeaconRead
+from app.services.activity import BEACON_RECEIVED, client_ip, log_activity
 
 router = APIRouter()
 VIEW = require_permission("template:view")
@@ -29,6 +30,7 @@ async def _see_all(db: AsyncSession, user: User) -> bool:
 )
 async def post_beacon(
     body: BeaconCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     proc: ProcessorService = Depends(get_processor),
 ) -> ExecutionResult:
@@ -48,6 +50,13 @@ async def post_beacon(
     usage.status = BEACON_TO_USAGE[body.status]
     await db.commit()
     await db.refresh(beacon)
+    await log_activity(
+        db, action=BEACON_RECEIVED, user_id=None,
+        entity_type="usage", entity_id=usage.id,
+        meta={"beacon_id": beacon.id, "processor_id": proc.id,
+              "processor_name": proc.name, "status": body.status},
+        ip=client_ip(request),
+    )
     return beacon
 
 
