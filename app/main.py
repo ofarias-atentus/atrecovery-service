@@ -1,12 +1,10 @@
-"""FastAPI application factory (Stage 2: + catalog/resources/groups wired).
-
-Later stages mount usage/beacon/stats routers and /admin here.
-"""
+"""FastAPI application factory (Stage 8: all routers + /admin wired)."""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
 
 from app import __version__
 from app.core.config import get_settings
@@ -40,6 +38,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -95,7 +94,10 @@ def create_app() -> FastAPI:
     app.include_router(beacons_router.router, prefix="/api/v1/beacons", tags=["beacons"])
     app.include_router(stats_router.router, prefix="/api/v1/stats", tags=["stats"])
     app.include_router(logs_router.router, prefix="/api/v1/activity-logs", tags=["activity"])
-    # Stage 8: mount sqladmin Admin here.
+
+    from app.admin.views import setup_admin
+
+    setup_admin(app)
     return app
 
 

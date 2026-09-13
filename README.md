@@ -16,13 +16,34 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 7 done** (stats: `statistics_definitions` with
-internal|external source, admin CRUD at `/stats/definitions`, value reads at
-`/stats/{name}` gated on the linked permission code; internal resolvers
-`most_used_template`, `last_fetch_by_user` (owner-or-admin for other user_ids),
-`beacon_success_rate`; external fetcher via `httpx` with timeout, required-param
-validation, optional dot-path mapping, 502 on failure; seed 3 defs on stats:view).
-Next: **Stage 8 — Admin UI, Docs Polish, Demo & Hardening** (sqladmin, ER docs, demo script, security pass).
+See `plan.md §6`. Current: **Stage 8 done — PoC complete** (sqladmin at `/admin`
+with local login guard for superuser/`admin:manage`, read-only activity-log and
+beacon views, credential hashes excluded; finalized `docs/ER.md`; `demo/demo.py`
+end-to-end; security pass below).
+
+## Demo
+
+```bash
+pip install -r requirements.txt
+rm -f data/app.db
+SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
+uvicorn app.main:app --port 8000 &
+PROCESSOR_TOKEN=lab-runner-demo-token python demo/demo.py
+# docs: http://127.0.0.1:8000/docs | admin: http://127.0.0.1:8000/admin (admin/admin123)
+```
+
+Demo flow: login both users → operator fetch → voucher usage (`V-…`) →
+processor beacon → usage status/beacons → `most_used_template` stat →
+ungranted-template 403 → activity logs. Rotate the demo token via
+`POST /api/v1/processors` afterwards (token shown once, stored hashed).
+
+## Security notes (PoC pass)
+
+- JWT access 30m + refresh 7d (env-tunable), secrets from env/`.env`.
+- Processor tokens random 32B, shown once, sha256 at rest, constant-time compare.
+- RBAC: coarse codes + object grants (deny by default); stats gated per definition.
+- Pagination capped at 100; Pydantic validation on all inputs; no hashes/tokens in reads.
+- Prod TODO: strong `JWT_SECRET`, CORS allowlist, egress allowlist for external stats.
 
 ## Notes
 
