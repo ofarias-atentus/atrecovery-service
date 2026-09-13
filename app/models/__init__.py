@@ -22,4 +22,5 @@ from app.models.resources import (  # noqa: F401
     ResourceGroupMember,
     ResourceMetadata,
 )
+from app.models.stats import StatisticDefinition  # noqa: F401
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit  # noqa: F401

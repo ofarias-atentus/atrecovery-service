@@ -16,12 +16,13 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 6 done** (activity tracking: append-only
-`activity_logs` + `services/activity.py`; hooks on template fetch, usage relay,
-beacon ingest (user NULL, processor in meta), grant create/delete and group
-member/assignment changes — all with client IP + meta JSON; `GET /activity-logs`
-admin-only, no write routes).
-Next: **Stage 7 — Statistics Engine** (definitions, internal resolvers over logs/usages/beacons, external fetch).
+See `plan.md §6`. Current: **Stage 7 done** (stats: `statistics_definitions` with
+internal|external source, admin CRUD at `/stats/definitions`, value reads at
+`/stats/{name}` gated on the linked permission code; internal resolvers
+`most_used_template`, `last_fetch_by_user` (owner-or-admin for other user_ids),
+`beacon_success_rate`; external fetcher via `httpx` with timeout, required-param
+validation, optional dot-path mapping, 502 on failure; seed 3 defs on stats:view).
+Next: **Stage 8 — Admin UI, Docs Polish, Demo & Hardening** (sqladmin, ER docs, demo script, security pass).
 
 ## Notes
 

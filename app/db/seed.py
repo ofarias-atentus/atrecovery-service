@@ -10,6 +10,8 @@ Stage 4: execution modes (direct/scheduler/voucher) + demo limit
 (hello.py, global, 10/day).
 Stage 5: processor service lab-runner (token from SEED_PROCESSOR_TOKEN env
 or generated once and printed; only its sha256 is stored).
+Stage 7: statistics definitions (most_used_template, last_fetch_by_user,
+beacon_success_rate — all internal, gated on stats:view).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
 """
@@ -37,6 +39,7 @@ from app.models.resources import (
     ResourceGroupMember,
     ResourceMetadata,
 )
+from app.models.stats import StatisticDefinition
 from app.models.usage import ExecutionMode, UsageLimit
 
 PERMISSION_DEFS: list[tuple[str, str]] = [
@@ -149,6 +152,7 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
     await seed_grants(db)
     await seed_usage(db)
     token_note = await seed_processors(db)
+    await seed_stats(db)
     counts = {
         "permissions": len(PERMISSION_DEFS),
         "roles": len(ROLE_DEFS),
@@ -158,6 +162,7 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "modes": len(MODE_DEFS),
         "limits": 1,
         "processors": 1,
+        "stats": len(STAT_DEFS),
     }
     if token_note:
         print(token_note)
@@ -414,6 +419,42 @@ async def seed_processors(db: AsyncSession) -> str | None:
     )
     await db.commit()
     return f"[seed] lab-runner X-Processor-Token (shown once): {token}"
+
+
+STAT_DEFS: list[dict] = [
+    {
+        "name": "most_used_template",
+        "source_type": "internal",
+        "query_config": {"resolver": "most_used_template"},
+        "required_params": [],
+        "required_permission_code": "stats:view",
+    },
+    {
+        "name": "last_fetch_by_user",
+        "source_type": "internal",
+        "query_config": {"resolver": "last_fetch_by_user"},
+        "required_params": ["user_id"],
+        "required_permission_code": "stats:view",
+    },
+    {
+        "name": "beacon_success_rate",
+        "source_type": "internal",
+        "query_config": {"resolver": "beacon_success_rate"},
+        "required_params": [],
+        "required_permission_code": "stats:view",
+    },
+]
+
+
+async def seed_stats(db: AsyncSession) -> None:
+    """Idempotent stats seed (Stage 7)."""
+    for sdef in STAT_DEFS:
+        existing = (
+            await db.execute(select(StatisticDefinition).where(StatisticDefinition.name == sdef["name"]))
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(StatisticDefinition(**sdef))
+    await db.commit()
 
 
 async def seed_dev() -> dict[str, int]:
