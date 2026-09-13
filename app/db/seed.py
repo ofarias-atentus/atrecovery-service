@@ -6,6 +6,8 @@ Stage 2: template categories (python/json), hello.py template, Moto G6
 resource + metadata, lab-phones group assigned to the operator role.
 Stage 3: object grants — operator role can view/use hello.py and the
 lab-phones group (hence its member Moto G6).
+Stage 4: execution modes (direct/scheduler/voucher) + demo limit
+(hello.py, global, 10/day).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
 """
@@ -29,6 +31,7 @@ from app.models.resources import (
     ResourceGroupMember,
     ResourceMetadata,
 )
+from app.models.usage import ExecutionMode, UsageLimit
 
 PERMISSION_DEFS: list[tuple[str, str]] = [
     ("users:manage", "Create/list/update users and assign roles"),
@@ -138,12 +141,15 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
     await db.commit()
     await seed_catalog(db)
     await seed_grants(db)
+    await seed_usage(db)
     return {
         "permissions": len(PERMISSION_DEFS),
         "roles": len(ROLE_DEFS),
         "users": len(USER_DEFS),
         "categories": len(CATEGORY_DEFS),
         "grants": 2,
+        "modes": len(MODE_DEFS),
+        "limits": 1,
     }
 
 
@@ -340,6 +346,42 @@ async def seed_grants(db: AsyncSession) -> None:
             ResourceGrant(
                 group_id=lab.id, principal_type="role",
                 principal_id=operator_role.id, can_view=True, can_use=True,
+            )
+        )
+    await db.commit()
+
+
+MODE_DEFS: list[tuple[str, str]] = [
+    ("direct", "Immediate relay to the processor service"),
+    ("scheduler", "Scheduled relay at schedule_at with payload"),
+    ("voucher", "Voucher flow: returns an external_dispatch_id for state checks"),
+]
+
+
+async def seed_usage(db: AsyncSession) -> None:
+    """Idempotent usage seed (Stage 4): modes + demo 10/day global limit on hello.py."""
+    for code, desc in MODE_DEFS:
+        m = (await db.execute(select(ExecutionMode).where(ExecutionMode.code == code))).scalar_one_or_none()
+        if m is None:
+            db.add(ExecutionMode(code=code, description=desc))
+    await db.flush()
+    hello = (
+        await db.execute(select(Template).where(Template.name == "hello.py"))
+    ).scalar_one()
+    lim = (
+        await db.execute(
+            select(UsageLimit).where(
+                UsageLimit.template_id == hello.id,
+                UsageLimit.scope_type == "global",
+                UsageLimit.window == "daily",
+            )
+        )
+    ).scalar_one_or_none()
+    if lim is None:
+        db.add(
+            UsageLimit(
+                template_id=hello.id, scope_type="global", scope_id=None,
+                max_uses=10, window="daily",
             )
         )
     await db.commit()

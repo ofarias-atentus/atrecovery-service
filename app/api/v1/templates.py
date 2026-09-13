@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_permission
+from app.core.deps import get_current_user, require_permission
 from app.db.session import get_db
 from app.models.catalog import Template, TemplateCategory
 from app.models.identity import User
 from app.schemas.catalog import TemplateCreate, TemplateFetch, TemplateRead, TemplateUpdate
 from app.services.rbac import granted_template_ids, require_template_access
+from app.services.usage_svc import LimitExceeded, check_limits
 
 router = APIRouter()
 VIEW = require_permission("template:view")
@@ -66,10 +67,18 @@ async def get_template(t: Template = Depends(VIEW_GRANT)) -> TemplateRead:
 
 
 @router.get("/{template_id}/fetch", response_model=TemplateFetch, summary="Fetch template content")
-async def fetch_template(t: Template = Depends(USE_GRANT)) -> Template:
-    # Stage 4 adds usage-limit checks, Stage 6 activity logging.
+async def fetch_template(
+    t: Template = Depends(USE_GRANT),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Template:
+    # Stage 6 adds activity logging.
     if not t.is_active:
         raise HTTPException(status_code=404, detail="template not found")
+    try:
+        await check_limits(db, user, t.id)
+    except LimitExceeded as e:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e)) from e
     return t
 
 

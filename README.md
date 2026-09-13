@@ -16,12 +16,13 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 3 done** (object grants: template/resource grant
-models + admin `/grants` routers, `services/rbac.py` evaluator —
-superuser → permission code → direct/role/group grant, deny by default;
-reads filtered to granted objects, `GET /templates/{id}/fetch` needs use grant;
-seed grants operator role → hello.py + lab-phones).
-Next: **Stage 4 — Usage Layer + Limits** (modes, usages, voucher flow, limit checks).
+See `plan.md §6`. Current: **Stage 4 done** (usage layer: `execution_modes`,
+`template_usages`, `usage_limits`; `services/usage_svc.py` limit checks
+global/user/role/group × total/daily/monthly; `POST /usages` with use-grant +
+429 on exhaustion, `GET /{id}/status` with voucher `external_dispatch_id`;
+scheduler requires `schedule_at`; fetch also checks limits; seed modes +
+hello.py 10/day demo limit).
+Next: **Stage 5 — Beacon Results + Processor Auth** (`X-Processor-Token`, results per usage).
 
 ## Notes
 

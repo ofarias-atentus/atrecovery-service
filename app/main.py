@@ -58,16 +58,19 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["system"])
     async def root() -> dict[str, str]:
-        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 3"}
+        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 4"}
 
     from app.api.v1 import auth as auth_router
     from app.api.v1 import categories as categories_router
     from app.api.v1 import grants as grants_router
     from app.api.v1 import groups as groups_router
+    from app.api.v1 import limits as limits_router
     from app.api.v1 import metadata as metadata_router
+    from app.api.v1 import modes as modes_router
     from app.api.v1 import resources as resources_router
     from app.api.v1 import roles as roles_router
     from app.api.v1 import templates as templates_router
+    from app.api.v1 import usages as usages_router
     from app.api.v1 import users as users_router
 
     app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["auth"])
@@ -81,7 +84,10 @@ def create_app() -> FastAPI:
     )
     app.include_router(groups_router.router, prefix="/api/v1/resource-groups", tags=["groups"])
     app.include_router(grants_router.router, prefix="/api/v1/grants", tags=["grants"])
-    # Stage 4+: usages; Stage 5+: beacons/processors
+    app.include_router(modes_router.router, prefix="/api/v1/execution-modes", tags=["modes"])
+    app.include_router(usages_router.router, prefix="/api/v1/usages", tags=["usages"])
+    app.include_router(limits_router.router, prefix="/api/v1/usage-limits", tags=["limits"])
+    # Stage 5+: beacons/processors
     # Stage 8: mount sqladmin Admin here.
     return app
 
