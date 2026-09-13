@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_user_permissions, require_permission
 from app.db.session import get_db
+from app.models.beacons import ExecutionResult
 from app.models.identity import User
 from app.models.usage import ExecutionMode, TemplateUsage
 from app.schemas.usage import UsageCreate, UsageRead, UsageStatusRead
@@ -109,6 +110,13 @@ async def get_usage_status(
     if not await _can_see(db, user, u):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not your usage")
     modes = await _mode_map(db)
+    beacons = (
+        await db.execute(
+            select(ExecutionResult.status)
+            .where(ExecutionResult.usage_id == u.id)
+            .order_by(ExecutionResult.id.desc())
+        )
+    ).scalars().all()
     return UsageStatusRead(
         id=u.id,
         template_id=u.template_id,
@@ -117,4 +125,6 @@ async def get_usage_status(
         external_dispatch_id=u.external_dispatch_id,
         schedule_at=u.schedule_at,
         created_at=u.created_at,
+        beacon_count=len(beacons),
+        latest_beacon_status=beacons[0] if beacons else None,
     )

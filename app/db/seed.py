@@ -8,18 +8,24 @@ Stage 3: object grants — operator role can view/use hello.py and the
 lab-phones group (hence its member Moto G6).
 Stage 4: execution modes (direct/scheduler/voucher) + demo limit
 (hello.py, global, 10/day).
+Stage 5: processor service lab-runner (token from SEED_PROCESSOR_TOKEN env
+or generated once and printed; only its sha256 is stored).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
 """
 from __future__ import annotations
 
 import asyncio
+import os
+import secrets
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import hash_processor_token
 from app.core.security import hash_password
 from app.db.session import get_session_factory, init_db
+from app.models.beacons import ProcessorService
 from app.models.catalog import Template, TemplateCategory
 from app.models.grants import ResourceGrant, TemplateGrant
 from app.models.identity import AuthIdentity, Permission, Role, RolePermission, User, UserRole
@@ -142,7 +148,8 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
     await seed_catalog(db)
     await seed_grants(db)
     await seed_usage(db)
-    return {
+    token_note = await seed_processors(db)
+    counts = {
         "permissions": len(PERMISSION_DEFS),
         "roles": len(ROLE_DEFS),
         "users": len(USER_DEFS),
@@ -150,7 +157,11 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "grants": 2,
         "modes": len(MODE_DEFS),
         "limits": 1,
+        "processors": 1,
     }
+    if token_note:
+        print(token_note)
+    return counts
 
 
 CATEGORY_DEFS: list[tuple[str, str]] = [
@@ -385,6 +396,24 @@ async def seed_usage(db: AsyncSession) -> None:
             )
         )
     await db.commit()
+
+
+async def seed_processors(db: AsyncSession) -> str | None:
+    """Idempotent processor seed (Stage 5). Returns a shown-once token note, if any."""
+    proc = (
+        await db.execute(select(ProcessorService).where(ProcessorService.name == "lab-runner"))
+    ).scalar_one_or_none()
+    if proc is not None:
+        return None
+    token = os.environ.get("SEED_PROCESSOR_TOKEN") or secrets.token_urlsafe(32)
+    db.add(
+        ProcessorService(
+            name="lab-runner", token_hash=hash_processor_token(token),
+            scopes=["beacon:report"],
+        )
+    )
+    await db.commit()
+    return f"[seed] lab-runner X-Processor-Token (shown once): {token}"
 
 
 async def seed_dev() -> dict[str, int]:

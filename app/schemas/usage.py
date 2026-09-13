@@ -61,7 +61,7 @@ class UsageRead(BaseModel):
 
 
 class UsageStatusRead(BaseModel):
-    """Voucher-friendly status view: local state + external dispatch id."""
+    """Voucher-friendly status view: local state + external dispatch id + beacons."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,3 +72,5 @@ class UsageStatusRead(BaseModel):
     external_dispatch_id: str | None = None
     schedule_at: datetime | None = None
     created_at: datetime | None = None
+    beacon_count: int = 0
+    latest_beacon_status: str | None = None

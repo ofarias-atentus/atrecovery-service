@@ -2,21 +2,26 @@
 
 Object-level grants (template/resource) arrive in Stage 3 via services/rbac.py;
 this module only handles coarse permission codes + superuser bypass.
+Stage 5 adds processor-service token auth (X-Processor-Token, sha256).
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 from collections.abc import Callable
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import TokenError, decode_token
 from app.db.session import get_db
+from app.models.beacons import ProcessorService
 from app.models.identity import Permission, Role, RolePermission, User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+processor_scheme = APIKeyHeader(name="X-Processor-Token", auto_error=False)
 
 
 async def get_user_permissions(db: AsyncSession, user: User) -> set[str]:
@@ -70,3 +75,27 @@ def require_permission(*codes: str) -> Callable:
 
 def require_admin() -> Callable:
     return require_permission("admin:manage")
+
+
+def hash_processor_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def get_processor(
+    token: str | None = Depends(processor_scheme), db: AsyncSession = Depends(get_db)
+) -> ProcessorService:
+    """Processor auth: X-Processor-Token matched by sha256, constant-time compare."""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="missing processor token"
+        )
+    incoming = hash_processor_token(token)
+    result = await db.execute(
+        select(ProcessorService).where(ProcessorService.is_active.is_(True))
+    )
+    for proc in result.scalars().all():
+        if hmac.compare_digest(proc.token_hash, incoming):
+            return proc
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid processor token"
+    )

@@ -16,13 +16,13 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 4 done** (usage layer: `execution_modes`,
-`template_usages`, `usage_limits`; `services/usage_svc.py` limit checks
-global/user/role/group × total/daily/monthly; `POST /usages` with use-grant +
-429 on exhaustion, `GET /{id}/status` with voucher `external_dispatch_id`;
-scheduler requires `schedule_at`; fetch also checks limits; seed modes +
-hello.py 10/day demo limit).
-Next: **Stage 5 — Beacon Results + Processor Auth** (`X-Processor-Token`, results per usage).
+See `plan.md §6`. Current: **Stage 5 done** (beacons: `processor_services` with
+sha256 token auth via `X-Processor-Token` + `get_processor`, `execution_results`
+one-to-many per usage; `POST /beacons` processor-only with `beacon:report` scope,
+drives usage ok→done/error→failed/partial→running; `GET /beacons` JWT-gated on
+`template:view` scoped to own usages; `/processors` admin CRUD with shown-once
+token; usage status embeds beacon count/latest; seed lab-runner).
+Next: **Stage 6 — Activity Tracking** (append-only logs from fetch/usage/beacon/grant changes).
 
 ## Notes
 
