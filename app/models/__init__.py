@@ -1,4 +1,12 @@
-"""Models package. Stage 1+ adds identity.py, catalog.py, resources.py, grants.py, usage.py, beacons.py, tracking.py, stats.py.
+"""Models package. Stage 1 adds identity; later stages add catalog, resources, grants, usage, beacons, tracking, stats.
 
-Import concrete models here once created so Base.metadata.create_all() picks them up.
+Import concrete models here so Base.metadata.create_all() picks them up.
 """
+from app.models.identity import (  # noqa: F401
+    AuthIdentity,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)

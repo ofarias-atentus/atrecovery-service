@@ -10,6 +10,7 @@ dependencies = [
   "aiosqlite>=0.20",
   "pydantic>=2.7",
   "pydantic-settings>=2.4",
+  "email-validator>=2.0",
   "pyjwt>=2.8",
   "passlib[bcrypt]>=1.7.4",
   "python-multipart>=0.0.18",
@@ -34,6 +35,10 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+[tool.ruff.lint]
+# B008 (function call in arg defaults) is FastAPI's canonical Depends() idiom.
+ignore = ["B008"]
 
 [build-system]
 requires = ["setuptools>=68"]

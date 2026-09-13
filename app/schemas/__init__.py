@@ -1,1 +1,12 @@
-"""Pydantic v2 schemas (Stage 1+ per domain)."""
+"""Pydantic v2 schemas (per domain)."""
+from app.schemas.identity import (  # noqa: F401
+    MeRead,
+    PermissionRead,
+    RefreshRequest,
+    RoleCreate,
+    RoleRead,
+    Token,
+    UserCreate,
+    UserRead,
+    UserUpdate,
+)

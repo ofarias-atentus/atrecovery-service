@@ -1,6 +1,6 @@
-"""FastAPI application factory (Stage 0).
+"""FastAPI application factory (Stage 1: identity/auth/RBAC wired).
 
-Later stages mount /api/v1 routers and /admin here.
+Later stages mount catalog/resource/usage/beacon/stats routers and /admin here.
 """
 from contextlib import asynccontextmanager
 
@@ -58,9 +58,16 @@ def create_app() -> FastAPI:
 
     @app.get("/", tags=["system"])
     async def root() -> dict[str, str]:
-        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 0"}
+        return {"app": settings.APP_NAME, "docs": "/docs", "health": "/health", "plan": "see plan.md Stage 1"}
 
-    # Stage 1+: app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"]) etc.
+    from app.api.v1 import auth as auth_router
+    from app.api.v1 import roles as roles_router
+    from app.api.v1 import users as users_router
+
+    app.include_router(auth_router.router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(users_router.router, prefix="/api/v1/users", tags=["users"])
+    app.include_router(roles_router.router, prefix="/api/v1/roles", tags=["roles"])
+    # Stage 2+: categories/templates/resources/groups/grants routers
     # Stage 8: mount sqladmin Admin here.
     return app
 
