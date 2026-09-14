@@ -1,6 +1,6 @@
 # Tutorial — First Steps with the Template Management PoC
 
-A hands-on walkthrough to get familiar with what this PoC does. Estimated time: 20–30 minutes.
+A hands-on walkthrough to get familiar with what this PoC does. Estimated time: 25–35 minutes.
 
 ## What is this?
 
@@ -16,6 +16,7 @@ The moving parts, in one sentence each:
 | Category | A template kind (`python`, `json`) that owns the `input_schema` |
 | Resource | A JSON device record (e.g. the `Moto G6 3` phone), validated against its `resource_types.schema` (e.g. `mobile_device`) |
 | Metadata | A separate typed JSON record attached to a resource (e.g. `monitor`); a resource can have several |
+| Resource group | A named box of devices (`lab-phones`); members = what's inside, assignments = who gets it (§5) |
 | Grant | Permission row that gives a user/role access to a template or resource (deny by default) |
 | Usage | A relayed "please run this template" request (`direct`, `scheduler`, or `voucher` mode) |
 | Beacon | A result posted back by an external processor for a usage (auth via `X-Processor-Token`, not JWT) |
@@ -118,13 +119,71 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/resources/$RES/metadata \
   -d '{"metadata_type":"monitor","data":{"monitor":"m1"}}'
 ```
 
-## 5. Relay usages — direct, scheduler, voucher
+## 5. Share devices with resource groups
+
+A group is a named box of devices with **two separate lists** — don't mix them up:
+
+- **members** = which devices are inside (`resource_group_members`)
+- **assignments** = which users/roles get the box (`group_assignments`)
+
+Neither list alone grants access. Access comes from a **grant** row pointing at the
+group (`POST /api/v1/grants/resources` with `group_id`). The payoff: add a new phone
+to a granted group and it's instantly visible — no new grant row needed.
+
+Hands-on: build a second group from scratch and watch the operator go from 403 → 200.
+
+```bash
+# 1) As admin: new group + new phone (mobile_device data needs udid/nombre/plataforma)
+GRP=$(curl -s -X POST http://127.0.0.1:8000/api/v1/resource-groups \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"name":"demo-phones","description":"Tutorial group"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+PIX=$(curl -s -X POST http://127.0.0.1:8000/api/v1/resources \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"name":"Pixel","identifier":"PIXEL01","data":{"udid":"PIXEL01","nombre":"Pixel","plataforma":"android"}}' | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+# 2) Put the phone in the box (members):
+curl -s -X POST http://127.0.0.1:8000/api/v1/resource-groups/$GRP/members \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d "{\"resource_id\":$PIX}" | python3 -m json.tool
+# → {"name":"demo-phones","resources":["PIXEL01"],"assignments":[]}
+
+# 3) Operator still locked out (403) — members alone grant nothing:
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/v1/resources/$PIX \
+  -H "Authorization: Bearer $OP"   # → 403
+
+# 4) Hand the box to the operator role (assignments) + switch access on (grant):
+RID=$(curl -s http://127.0.0.1:8000/api/v1/roles -H "Authorization: Bearer $ADMIN" \
+  | python3 -c "import sys,json; print(next(r['id'] for r in json.load(sys.stdin) if r['name']=='operator'))")
+curl -s -X POST http://127.0.0.1:8000/api/v1/resource-groups/$GRP/assignments \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d "{\"principal_type\":\"role\",\"principal_id\":$RID}" | python3 -m json.tool
+curl -s -X POST http://127.0.0.1:8000/api/v1/grants/resources \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d "{\"group_id\":$GRP,\"principal_type\":\"role\",\"principal_id\":$RID,\"can_view\":true,\"can_use\":true}" | python3 -m json.tool
+
+# 5) Operator sees the phone now — and any phone added to demo-phones later is automatic:
+curl -s http://127.0.0.1:8000/api/v1/resources/$PIX \
+  -H "Authorization: Bearer $OP" | python3 -m json.tool  # → 200
+
+# Audit helper — which boxes reach the operator (direct + via roles)?
+OPID=$(curl -s http://127.0.0.1:8000/api/v1/users -H "Authorization: Bearer $ADMIN" \
+  | python3 -c "import sys,json; print(next(u['id'] for u in json.load(sys.stdin) if u['username']=='operator'))")
+curl -s http://127.0.0.1:8000/api/v1/resource-groups/by-principal/user/$OPID \
+  -H "Authorization: Bearer $ADMIN" | python3 -m json.tool
+# → lab-phones (seed) + demo-phones
+```
+
+Takeaway: **members** say what's inside, **assignments** say who gets it, **grants**
+switch access on. The seed's `lab-phones` is exactly this pattern pre-built: Moto G6
+inside, assigned + granted to the `operator` role.
+
+## 6. Relay usages — direct, scheduler, voucher
 
 This is the "execution is out-of-scope" loop: you record a request, an external
 service later reports the result. Three modes exist (`GET /api/v1/execution-modes`
 lists them); all three need `template:use` plus a use-grant on the template.
 
-### 5a. Direct — fire and record (status is `dispatched` right away)
+### 6a. Direct — fire and record (status is `dispatched` right away)
 
 `mode` defaults to `direct`, so the smallest possible usage is just a template id:
 
@@ -135,7 +194,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 # → {"mode":"direct","status":"dispatched","external_dispatch_id":null,...}
 ```
 
-### 5b. Scheduler — store a future run (nothing dispatches it automatically)
+### 6b. Scheduler — store a future run (nothing dispatches it automatically)
 
 Scheduler mode **requires** `schedule_at` and optionally stores a `payload`.
 The PoC only records the row — a real scheduler worker would pick it up later
@@ -156,7 +215,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 # → {"mode":"scheduler","status":"pending","schedule_at":"2030-01-01T00:00:00","payload":{"name":"ops"},...}
 ```
 
-### 5c. Voucher — get a dispatch id, then report a beacon
+### 6c. Voucher — get a dispatch id, then report a beacon
 
 ```bash
 # 1) Operator requests hello.py in voucher mode → you get an external dispatch id V-…
@@ -182,7 +241,7 @@ curl -s "http://127.0.0.1:8000/api/v1/beacons?usage_id=$USAGE" \
   -H "Authorization: Bearer $OP" | python3 -m json.tool
 ```
 
-### 5d. Target a resource (needs a use-grant on it too)
+### 6d. Target a resource (needs a use-grant on it too)
 
 Pass `resource_id` to aim a usage at a device. The operator holds a use-grant on the
 `lab-phones` group, so the seed phone works; an ungranted resource gives 403:
@@ -199,7 +258,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -d "{\"template_id\":$SECRET}" | python3 -m json.tool
 ```
 
-### 5e. List usages and watch the limits
+### 6e. List usages and watch the limits
 
 ```bash
 # Operators see only their own usages; admins see everyone's (try both tokens):
@@ -213,7 +272,7 @@ usage limits answer **429**. The seed puts a 10/day global limit on `hello.py`
 (`GET /api/v1/usage-limits` as admin to inspect) — hammer the fetch endpoint in a
 loop and you'll see fetch flip to 429 too, since fetches check limits as well.
 
-## 6. Peek at the audit trail and the admin UI
+## 7. Peek at the audit trail and the admin UI
 
 ```bash
 # Every fetch/usage/beacon/grant change appends here (admin only, read-only):
@@ -224,10 +283,10 @@ curl -s http://127.0.0.1:8000/api/v1/activity-logs \
 Then open http://127.0.0.1:8000/admin and log in as `admin` / `admin123`:
 CRUD every table, read-only logs/beacons, credential hashes hidden.
 
-## 7. Run the automated end-to-end demo and the tests
+## 8. Run the automated end-to-end demo and the tests
 
 ```bash
-# Fresh DB + known processor token + demo (mirrors steps 1–6 automatically):
+# Fresh DB + known processor token + demo (mirrors steps 1–7 automatically):
 rm -f data/app.db
 SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
 uvicorn app.main:app --port 8000 &
