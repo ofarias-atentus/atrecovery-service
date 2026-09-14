@@ -205,25 +205,46 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 # → {"mode":"direct","status":"dispatched","external_dispatch_id":null,...}
 ```
 
-### 6b. Scheduler — store a future run (nothing dispatches it automatically)
+### 6b. Scheduler — record a cron expression (external systems own execution)
 
-Scheduler mode **requires** `schedule_at` and optionally stores a `payload`.
-The PoC only records the row — a real scheduler worker would pick it up later
-(see `imprv.md`).
+Scheduler mode **requires** `cron` (validated, 5-field format) and optionally
+stores a `payload`. The PoC only records the row — the *external executor* reads
+`cron` (plus the read-time `next_fire_at` hint) and decides when to fire. Nothing
+here ticks or dispatches (see `imprv.md`).
 
 ```bash
-# Missing schedule_at → 422. Try it to see the guard:
+# Missing cron → 422. Try it to see the guard:
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
   -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\"}" | python3 -m json.tool
-# → {"detail":"scheduler mode requires schedule_at"}
+# → {"detail":"scheduler mode requires cron"}
 
-# With a date + payload → status stays "pending" until something external acts:
+# Malformed cron → 422 as well:
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\",\"schedule_at\":\"2030-01-01T00:00:00\",\"payload\":{\"name\":\"ops\"}}" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\",\"cron\":\"every sometimes\"}" | python3 -m json.tool
+
+# Every 15 min + payload → status stays "pending" until the executor reports:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\",\"cron\":\"*/15 * * * *\",\"payload\":{\"name\":\"ops\"}}" \
   | python3 -m json.tool
-# → {"mode":"scheduler","status":"pending","schedule_at":"2030-01-01T00:00:00","payload":{"name":"ops"},...}
+# → {"mode":"scheduler","status":"pending","cron":"*/15 * * * *","next_fire_at":"...","payload":{"name":"ops"},...}
+```
+
+Cron-driven executors report repeatedly, so beacons accept an `idem_key` owned by
+the reporter: repeating a seen `(usage_id, idem_key)` replays the stored beacon
+(**200**) instead of appending a duplicate (**201**). Each accepted beacon bumps
+the usage `use_count`:
+
+```bash
+# (needs USAGE from §6c and a processor token; replace the key per fire)
+curl -s -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: lab-runner-demo-token" -H "Content-Type: application/json" \
+  -d "{\"usage_id\":$USAGE,\"status\":\"ok\",\"idem_key\":\"cron-001\"}" | python3 -m json.tool  # → 201
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: lab-runner-demo-token" -H "Content-Type: application/json" \
+  -d "{\"usage_id\":$USAGE,\"status\":\"ok\",\"idem_key\":\"cron-001\"}"  # → 200, same row
 ```
 
 ### 6c. Voucher — get a dispatch id, then report a beacon

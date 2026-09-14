@@ -1,8 +1,10 @@
 """Usage-layer models (Stage 4): execution modes, template usages, usage limits.
 
-Execution is out-of-scope: rows only relay dispatch requests (direct /
-scheduler / voucher) and record state. Status transitions to running/done/
-failed arrive via beacons in Stage 5.
+Execution is out-of-scope and owned by external systems: rows only relay
+dispatch requests (direct / scheduler / voucher) and record state reported
+via beacons. Scheduler usages carry a cron expression describing recurrence;
+the external executor reads it (plus the read-time ``next_fire_at`` hint)
+and decides when to fire — nothing in this codebase ticks or dispatches.
 """
 from __future__ import annotations
 
@@ -49,7 +51,7 @@ class TemplateUsage(Base):
     external_dispatch_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, unique=True, index=True
     )
-    schedule_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cron: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     use_count: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(

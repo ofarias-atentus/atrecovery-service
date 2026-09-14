@@ -40,7 +40,7 @@ class UsageCreate(BaseModel):
     template_id: int
     resource_id: int
     mode: str = "direct"
-    schedule_at: datetime | None = None
+    cron: str | None = Field(default=None, max_length=64, examples=["*/15 * * * *"])
     payload: dict[str, Any] | None = None
 
 
@@ -54,7 +54,8 @@ class UsageRead(BaseModel):
     mode: str = "direct"
     status: str
     external_dispatch_id: str | None = None
-    schedule_at: datetime | None = None
+    cron: str | None = None
+    next_fire_at: datetime | None = None
     payload: dict[str, Any] | None = None
     use_count: int
     created_at: datetime | None = None
@@ -70,7 +71,8 @@ class UsageStatusRead(BaseModel):
     mode: str
     status: str
     external_dispatch_id: str | None = None
-    schedule_at: datetime | None = None
+    cron: str | None = None
+    next_fire_at: datetime | None = None
     created_at: datetime | None = None
     beacon_count: int = 0
     latest_beacon_status: str | None = None

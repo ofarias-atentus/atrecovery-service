@@ -20,6 +20,7 @@ dependencies = [
   "httpx2>=2.0",
   "python-dotenv>=1.0",
   "jsonschema>=4.0",
+  "croniter>=2.0",
 ]
 
 [project.optional-dependencies]

@@ -76,6 +76,21 @@ def main() -> int:
     beacons = client.get(f"/api/v1/beacons?usage_id={usage['id']}", headers=operator).json()
     check("beacons listed for usage", len(beacons) == 1 and beacons[0]["status"] == "ok")
 
+    retry = client.post(
+        "/api/v1/beacons", headers={"X-Processor-Token": PROCESSOR_TOKEN},
+        json={"usage_id": usage["id"], "status": "ok", "result": {"rc": 0},
+              "idem_key": "demo-cron-001"},
+    )
+    repost = client.post(
+        "/api/v1/beacons", headers={"X-Processor-Token": PROCESSOR_TOKEN},
+        json={"usage_id": usage["id"], "status": "ok", "result": {"rc": 0},
+              "idem_key": "demo-cron-001"},
+    )
+    check("idempotent beacon retry replays",
+          retry.status_code == 201 and repost.status_code == 200
+          and repost.json()["id"] == retry.json()["id"],
+          f"{retry.status_code}/{repost.status_code}")
+
     secret = client.post(
         "/api/v1/templates", headers=admin,
         json={"name": f"demo-secret-{os.getpid()}.py", "category_id": 1,

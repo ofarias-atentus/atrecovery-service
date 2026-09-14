@@ -361,7 +361,7 @@ class ExecutionModeAdmin(_Base, model=ExecutionMode):
 
 
 class TemplateUsageAdmin(_Base, model=TemplateUsage):
-    column_list = ["template_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "use_count", "created_at"]  # noqa: RUF012
+    column_list = ["template_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
     column_labels = {"template_id": "template", "resource_id": "resource", "requested_by": "requested by", "mode_id": "mode", "external_dispatch_id": "dispatch id", "use_count": "uses"}  # noqa: RUF012
     column_formatters = {"template_id": _fmt_template, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
     column_formatters_detail = {"template_id": _fmt_template, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012

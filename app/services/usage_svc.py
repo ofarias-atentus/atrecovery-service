@@ -43,6 +43,36 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def validate_cron(expr: str) -> None:
+    """Raise 422 if ``expr`` is not a valid 5-field cron expression."""
+    from croniter import CroniterBadCronError, croniter
+
+    try:
+        croniter(expr)
+    except (CroniterBadCronError, ValueError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"invalid cron expression: {expr}",
+        ) from e
+
+
+def next_fire_at(cron: str | None) -> datetime | None:
+    """Next fire time for a cron expression (read-time hint for executors).
+
+    Returns None when no cron is set or the stored value is unparseable
+    (defensive: rows predate validation or were written by another path).
+    Nothing here ticks or dispatches — external systems own execution.
+    """
+    if not cron:
+        return None
+    try:
+        from croniter import CroniterBadCronError, CroniterBadDateError, croniter
+
+        return croniter(cron, _utcnow_naive()).get_next(datetime)
+    except (CroniterBadCronError, CroniterBadDateError, ValueError):
+        return None
+
+
 def window_start(window: str) -> datetime | None:
     now = _utcnow_naive()
     if window == "total":
@@ -175,10 +205,17 @@ async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> Templ
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="template not associated with this resource",
         )
-    if mode.code == "scheduler" and body.schedule_at is None:
+    if body.cron is not None:
+        validate_cron(body.cron)
+    if mode.code == "scheduler" and not body.cron:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="scheduler mode requires schedule_at",
+            detail="scheduler mode requires cron",
+        )
+    if mode.code != "scheduler" and body.cron is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="cron only applies to scheduler mode",
         )
     try:
         await check_limits(db, user, t.id)
@@ -195,7 +232,7 @@ async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> Templ
         external_dispatch_id=(
             f"V-{uuid.uuid4().hex[:12].upper()}" if mode.code == "voucher" else None
         ),
-        schedule_at=body.schedule_at,
+        cron=body.cron,
         payload=body.payload,
     )
     db.add(usage)

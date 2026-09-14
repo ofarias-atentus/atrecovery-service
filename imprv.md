@@ -33,9 +33,10 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
 
 - **Usage status state machine** — enforce legal transitions
   (`pending → dispatched → running → done|failed`) instead of last-beacon-wins.
-- **Scheduler worker** — `scheduler` usages with `schedule_at` are stored but
-  nothing dispatches them when due. Add an outbox/worker (APScheduler, arq, or
-  Celery) + a `due` listing.
+- **Scheduler worker** — `scheduler` usages with a `cron` expression are stored
+  but nothing dispatches them when due (external systems own execution; a local
+  worker would contradict that). If ever needed: outbox/worker (APScheduler, arq,
+  or Celery) + a `due` listing.
 - **Voucher reconciliation** — `external_dispatch_id` state is local-only
   (stub). Implement the remote state check against the dispatching system.
 - **Pagination metadata** — return `{items, total, limit, offset}` envelopes

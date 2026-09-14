@@ -36,6 +36,13 @@ class BeaconCreate(BaseModel):
     usage_id: int
     status: BeaconStatus
     result: dict[str, Any] | None = None
+    idem_key: str | None = Field(
+        default=None, max_length=64,
+        examples=["cron-2026-09-14T04-00"],
+        description="Optional deduplication key owned by the reporting system: "
+        "repeating a seen (usage_id, idem_key) replays the stored beacon (200) "
+        "instead of recording a duplicate (201).",
+    )
 
 
 class BeaconRead(BaseModel):
@@ -46,4 +53,5 @@ class BeaconRead(BaseModel):
     processor_id: int
     status: str
     result: dict[str, Any] | None = None
+    idem_key: str | None = None
     received_at: datetime | None = None

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -31,9 +31,18 @@ class ProcessorService(Base):
 
 
 class ExecutionResult(Base):
-    """Beacon: one result report from a processor for a usage."""
+    """Beacon: one result report from a processor for a usage.
+
+    External executors (e.g. cron-driven) may report repeatedly: an optional
+    client-supplied ``idem_key`` deduplicates retries per usage — a repeat
+    replays the stored row instead of appending a new one. Key-less beacons
+    keep the legacy append behavior.
+    """
 
     __tablename__ = "execution_results"
+    __table_args__ = (
+        UniqueConstraint("usage_id", "idem_key", name="uq_beacon_usage_idem_key"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     usage_id: Mapped[int] = mapped_column(
@@ -44,6 +53,7 @@ class ExecutionResult(Base):
     )
     status: Mapped[str] = mapped_column(String(16), index=True)  # ok|error|partial
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    idem_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

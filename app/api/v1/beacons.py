@@ -1,10 +1,13 @@
 """Beacons router: processors report (token auth, no JWT), users read (JWT).
 
 POST requires the ``beacon:report`` scope and moves the usage lifecycle
-(ok → done, error → failed, partial → running). GET needs ``template:view``
-and is scoped to the caller's own usages unless admin.
+(ok → done, error → failed, partial → running). Cron-driven executors may
+report repeatedly: repeating a seen (usage_id, idem_key) replays the stored
+row (200) instead of recording a duplicate (201). Each accepted beacon bumps
+the usage ``use_count``. GET needs ``template:view`` and is scoped to the
+caller's own usages unless admin.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +34,7 @@ async def _see_all(db: AsyncSession, user: User) -> bool:
 async def post_beacon(
     body: BeaconCreate,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     proc: ProcessorService = Depends(get_processor),
 ) -> ExecutionResult:
@@ -43,11 +47,25 @@ async def post_beacon(
     ).scalar_one_or_none()
     if usage is None:
         raise HTTPException(status_code=404, detail="usage not found")
+    if body.idem_key is not None:
+        replay = (
+            await db.execute(
+                select(ExecutionResult).where(
+                    ExecutionResult.usage_id == usage.id,
+                    ExecutionResult.idem_key == body.idem_key,
+                )
+            )
+        ).scalar_one_or_none()
+        if replay is not None:
+            response.status_code = status.HTTP_200_OK
+            return replay
     beacon = ExecutionResult(
-        usage_id=usage.id, processor_id=proc.id, status=body.status, result=body.result
+        usage_id=usage.id, processor_id=proc.id, status=body.status,
+        result=body.result, idem_key=body.idem_key,
     )
     db.add(beacon)
     usage.status = BEACON_TO_USAGE[body.status]
+    usage.use_count = (usage.use_count or 0) + 1
     await db.commit()
     await db.refresh(beacon)
     await log_activity(

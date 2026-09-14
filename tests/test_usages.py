@@ -74,13 +74,30 @@ async def test_direct_usage_roundtrip(client):
     assert st["status"] == "dispatched" and st["external_dispatch_id"] is None
 
 
-async def test_scheduler_requires_schedule_at(client):
+async def test_scheduler_requires_valid_cron(client):
     op = await _operator(client)
     hello, moto = await _hello(client, op), await _moto(client, op)
+    # neither cron nor anything else to schedule on → 422
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
             json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler"},
+        )
+    ).status_code == 422
+    # malformed cron → 422
+    assert (
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello["id"], "resource_id": moto["id"],
+                  "mode": "scheduler", "cron": "not a cron"},
+        )
+    ).status_code == 422
+    # cron on a non-scheduler mode → 422
+    assert (
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello["id"], "resource_id": moto["id"],
+                  "mode": "direct", "cron": "*/15 * * * *"},
         )
     ).status_code == 422
     u = (
@@ -88,11 +105,16 @@ async def test_scheduler_requires_schedule_at(client):
             "/api/v1/usages",
             headers=op,
             json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler",
-                  "schedule_at": "2030-01-01T00:00:00", "payload": {"name": "ops"}},
+                  "cron": "*/15 * * * *", "payload": {"name": "ops"}},
         )
     ).json()
     assert u["status"] == "pending" and u["payload"] == {"name": "ops"}
-    assert u["schedule_at"].startswith("2030-01-01")
+    assert u["cron"] == "*/15 * * * *"
+    assert u["next_fire_at"] is not None
+    from datetime import UTC, datetime
+    assert datetime.fromisoformat(u["next_fire_at"]) > datetime.now(UTC).replace(tzinfo=None)
+    st = (await client.get(f"/api/v1/usages/{u['id']}/status", headers=op)).json()
+    assert st["cron"] == "*/15 * * * *" and st["next_fire_at"] == u["next_fire_at"]
 
 
 async def test_voucher_flow_returns_dispatch_id(client):

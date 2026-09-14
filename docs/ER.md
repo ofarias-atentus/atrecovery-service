@@ -57,6 +57,8 @@ Text version:
 [resources|resource_groups] 1---* [resource_grants] -> principal(user|role|group)
 [execution_modes] 1---* [template_usages]
 [templates] 1---* [template_usages] *---1 [users(requested_by)] / [resources] 1---* [template_usages]
+  usages carry cron (scheduler recurrence, validated) + use_count (accepted beacons);
+  beacons carry optional idem_key, unique per (usage_id, idem_key) for repeat-safe cron reports
 [templates] 1---* [usage_limits]
 [template_usages] 1---* [execution_results] / [processor_services] 1---* [execution_results]
 [users] 1---* [activity_logs] (+ usage/beacon rows reference template_usages)

@@ -92,6 +92,61 @@ async def test_beacon_report_drives_usage_lifecycle(client):
     assert st2["status"] == "failed"
 
 
+async def test_beacon_idempotency_key_replays_and_counts(client):
+    """Cron-driven executors may report repeatedly: same key replays (200),
+    new keys append (201), and use_count tracks accepted executions."""
+    admin, op = await _admin(client), await _operator(client)
+    proc = await _make_processor(client, admin)
+    hello_id = await _hello_id(client, op)
+    moto_id = await _moto_id(client, op)
+    usage = (
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
+    ).json()
+    assert usage["use_count"] == 1
+    first = await client.post(
+        "/api/v1/beacons", headers=_ph(proc["token"]),
+        json={"usage_id": usage["id"], "status": "ok", "result": {"rc": 0},
+              "idem_key": "cron-001"},
+    )
+    assert first.status_code == 201
+    assert first.json()["idem_key"] == "cron-001"
+    # exact repeat: replayed, no new row, no extra count
+    replay = await client.post(
+        "/api/v1/beacons", headers=_ph(proc["token"]),
+        json={"usage_id": usage["id"], "status": "ok", "result": {"rc": 0},
+              "idem_key": "cron-001"},
+    )
+    assert replay.status_code == 200
+    assert replay.json()["id"] == first.json()["id"]
+    st = (await client.get(f"/api/v1/usages/{usage['id']}/status", headers=op)).json()
+    assert st["beacon_count"] == 1
+    got = (await client.get(f"/api/v1/usages/{usage['id']}", headers=op)).json()
+    assert got["use_count"] == 2
+    # new key, same content: genuinely new execution, appended + counted
+    second = await client.post(
+        "/api/v1/beacons", headers=_ph(proc["token"]),
+        json={"usage_id": usage["id"], "status": "ok", "result": {"rc": 0},
+              "idem_key": "cron-002"},
+    )
+    assert second.status_code == 201
+    assert second.json()["id"] != first.json()["id"]
+    st = (await client.get(f"/api/v1/usages/{usage['id']}/status", headers=op)).json()
+    assert st["beacon_count"] == 2
+    got = (await client.get(f"/api/v1/usages/{usage['id']}", headers=op)).json()
+    assert got["use_count"] == 3
+    # keyless beacons keep the legacy append-everything behavior
+    third = await client.post(
+        "/api/v1/beacons", headers=_ph(proc["token"]),
+        json={"usage_id": usage["id"], "status": "partial"},
+    )
+    assert third.status_code == 201
+    got = (await client.get(f"/api/v1/usages/{usage['id']}", headers=op)).json()
+    assert got["use_count"] == 4
+
+
 async def test_beacon_auth_gates(client):
     admin, op = await _admin(client), await _operator(client)
     proc = await _make_processor(client, admin)

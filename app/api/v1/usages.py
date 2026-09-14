@@ -17,7 +17,7 @@ from app.models.identity import User
 from app.models.usage import ExecutionMode, TemplateUsage
 from app.schemas.usage import UsageCreate, UsageRead, UsageStatusRead
 from app.services.activity import TEMPLATE_USE, client_ip, log_activity
-from app.services.usage_svc import create_usage
+from app.services.usage_svc import create_usage, next_fire_at
 
 router = APIRouter()
 USE = require_permission("template:use")
@@ -38,7 +38,8 @@ def _to_read(u: TemplateUsage, modes: dict[int, str]) -> UsageRead:
         mode=modes.get(u.mode_id, "?"),
         status=u.status,
         external_dispatch_id=u.external_dispatch_id,
-        schedule_at=u.schedule_at,
+        cron=u.cron,
+        next_fire_at=next_fire_at(u.cron),
         payload=u.payload,
         use_count=u.use_count,
         created_at=u.created_at,
@@ -133,7 +134,8 @@ async def get_usage_status(
         mode=modes.get(u.mode_id, "?"),
         status=u.status,
         external_dispatch_id=u.external_dispatch_id,
-        schedule_at=u.schedule_at,
+        cron=u.cron,
+        next_fire_at=next_fire_at(u.cron),
         created_at=u.created_at,
         beacon_count=len(beacons),
         latest_beacon_status=beacons[0] if beacons else None,

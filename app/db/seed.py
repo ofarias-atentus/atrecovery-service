@@ -488,7 +488,7 @@ async def seed_grants(db: AsyncSession) -> None:
 
 MODE_DEFS: list[tuple[str, str]] = [
     ("direct", "Immediate relay to the processor service"),
-    ("scheduler", "Scheduled relay at schedule_at with payload"),
+    ("scheduler", "Scheduled relay on a cron expression with payload"),
     ("voucher", "Voucher flow: returns an external_dispatch_id for state checks"),
 ]
 
