@@ -11,20 +11,22 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResourceTypeCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(min_length=1, max_length=64, examples=["mobile_device"])
     description: str | None = None
-    schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    # NOTE: attribute is `schema_def` (alias `schema`) to avoid shadowing
+    # BaseModel.schema and the resulting UserWarning. JSON API stays `schema`.
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
     is_active: bool = True
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 class ResourceTypeUpdate(BaseModel):
-    description: str | None = None
-    schema: dict[str, Any] | None = Field(default=None, alias="schema")
-    is_active: bool | None = None
-
     model_config = ConfigDict(populate_by_name=True)
+
+    description: str | None = None
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool | None = None
 
 
 class ResourceTypeRead(BaseModel):
@@ -33,7 +35,7 @@ class ResourceTypeRead(BaseModel):
     id: int
     name: str
     description: str | None = None
-    schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
     is_active: bool
 
 

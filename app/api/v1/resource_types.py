@@ -21,7 +21,11 @@ MANAGE = require_permission("resource:manage")
 
 def _to_read(t: ResourceType) -> ResourceTypeRead:
     return ResourceTypeRead(
-        id=t.id, name=t.name, description=t.description, schema=t.schema, is_active=t.is_active
+        id=t.id,
+        name=t.name,
+        description=t.description,
+        schema_def=t.schema,
+        is_active=t.is_active,
     )
 
 
@@ -59,7 +63,7 @@ async def create_type(
     if exists.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="resource type already exists")
     t = ResourceType(
-        name=body.name, description=body.description, schema=body.schema,
+        name=body.name, description=body.description, schema=body.schema_def,
         is_active=body.is_active,
     )
     db.add(t)
@@ -81,8 +85,8 @@ async def update_type(
         raise HTTPException(status_code=404, detail="resource type not found")
     if body.description is not None:
         t.description = body.description
-    if body.schema is not None:
-        t.schema = body.schema
+    if body.schema_def is not None:
+        t.schema = body.schema_def
     if body.is_active is not None:
         t.is_active = body.is_active
     await db.commit()
