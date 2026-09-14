@@ -1,9 +1,12 @@
-"""JSON structure validation (templates + resources).
+"""JSON structure validation (templates + resources + metadata).
 
-Both templates (``content`` JSON validated against ``input_schema`` or the
-category ``schema_hint``) and resources (``data`` JSON validated against the
-resource-type ``schema``) share this helper, so structure validation works
-"in the same way" for both domains.
+- Templates: ``content`` JSON validated against the owning
+  ``template_categories.input_schema``.
+- Resources: ``data`` JSON validated against the owning
+  ``resource_types.schema``.
+- Resource metadata: ``data`` JSON validated against the owning
+  ``metadata_types.schema``.
+All three share this helper, so structure validation works "in the same way".
 """
 from __future__ import annotations
 
@@ -40,9 +43,11 @@ def validate_json_data(data: Any, schema: dict[str, Any] | None, *, label: str =
         ) from e
 
 
-def effective_template_schema(
-    input_schema: dict[str, Any] | None,
-    category_schema_hint: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Template structure rule: per-template ``input_schema`` wins, else category hint."""
-    return input_schema if input_schema is not None else category_schema_hint
+def category_schema(cat: Any | None) -> dict[str, Any] | None:
+    """Return the category input_schema (legacy ``schema_hint`` fallback)."""
+    if cat is None:
+        return None
+    schema = getattr(cat, "input_schema", None)
+    if schema is not None:
+        return schema
+    return getattr(cat, "schema_hint", None)

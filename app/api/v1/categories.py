@@ -19,11 +19,13 @@ MANAGE = require_permission("template:manage")
 
 
 def _to_read(c: TemplateCategory) -> CategoryRead:
+    schema = c.input_schema if c.input_schema is not None else getattr(c, "schema_hint", None)
     return CategoryRead(
         id=c.id,
         name=c.name,
         description=c.description,
-        schema_hint=c.schema_hint,
+        input_schema=schema,
+        schema_hint=schema,
         is_active=c.is_active,
         created_at=c.created_at,
     )
@@ -62,7 +64,7 @@ async def create_category(
     exists = await db.execute(select(TemplateCategory).where(TemplateCategory.name == body.name))
     if exists.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="category already exists")
-    cat = TemplateCategory(name=body.name, description=body.description, schema_hint=body.schema_hint)
+    cat = TemplateCategory(name=body.name, description=body.description, input_schema=body.input_schema)
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
@@ -82,8 +84,8 @@ async def update_category(
         raise HTTPException(status_code=404, detail="category not found")
     if body.description is not None:
         cat.description = body.description
-    if body.schema_hint is not None:
-        cat.schema_hint = body.schema_hint
+    if body.input_schema is not None:
+        cat.input_schema = body.input_schema
     if body.is_active is not None:
         cat.is_active = body.is_active
     await db.commit()

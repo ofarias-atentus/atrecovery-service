@@ -42,7 +42,7 @@ ungranted-template 403 → activity logs. Rotate the demo token via
 - JWT access 30m + refresh 7d (env-tunable), secrets from env/`.env`.
 - Processor tokens random 32B, shown once, sha256 at rest, constant-time compare.
 - RBAC: coarse codes + object grants (deny by default); stats via per-user/role grants (no stats permission codes).
-- Templates store JSON `content` validated against `input_schema` else category `schema_hint`; resources store JSON `data` validated against their `resource_types.schema` (e.g. `mobile_device`).
+- Templates store JSON `content` validated against their category `input_schema`; resources store JSON `data` validated against their `resource_types.schema` (e.g. `mobile_device`); resource metadata entries are stored separately with their own `metadata_types.schema` (e.g. `monitor`), multiple per resource.
 - Pagination capped at 100; Pydantic validation on all inputs; no hashes/tokens in reads.
 - Prod TODO: strong `JWT_SECRET`, CORS allowlist, egress allowlist for external stats.
 

@@ -1,16 +1,20 @@
-"""Resource models: types, JSON-data resources, groups, assignments.
+"""Resource models: types, JSON-data resources, typed metadata, groups.
 
 - ResourceType = category of resource (e.g. ``mobile_device``) with an
   optional JSON Schema (``schema``) used to validate ``Resource.data``.
-- Resource = ``id / name / identifier / type + data JSON``. All device
+- Resource = ``id / name / identifier / type + data JSON``. Device
   details (udid, plataforma, ...) live inside ``data`` as JSON.
+- MetadataType = category of metadata (e.g. ``monitor``) with an optional
+  JSON Schema used to validate ``ResourceMetadata.data``.
+- ResourceMetadata = one typed JSON metadata entry attached to a resource.
+  A resource can have multiple metadata entries (one per type).
 - ResourceGroup + members + GroupAssignment (group -> user/role principal).
 """
 from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import ActiveMixin, Base, TimestampMixin
@@ -46,6 +50,41 @@ class Resource(Base, TimestampMixin, ActiveMixin):
     groups: Mapped[list[ResourceGroup]] = relationship(
         secondary="resource_group_members", back_populates="resources", lazy="selectin"
     )
+    metadata_entries: Mapped[list[ResourceMetadata]] = relationship(
+        back_populates="resource", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class MetadataType(Base, TimestampMixin, ActiveMixin):
+    __tablename__ = "metadata_types"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    entries: Mapped[list[ResourceMetadata]] = relationship(
+        back_populates="metadata_type", lazy="selectin"
+    )
+
+
+class ResourceMetadata(Base, TimestampMixin):
+    __tablename__ = "resource_metadata"
+    __table_args__ = (
+        UniqueConstraint("resource_id", "metadata_type_id", name="uq_resource_metadata"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("resources.id", ondelete="CASCADE"), index=True
+    )
+    metadata_type_id: Mapped[int] = mapped_column(
+        ForeignKey("metadata_types.id", ondelete="RESTRICT"), index=True
+    )
+    data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    resource: Mapped[Resource] = relationship(back_populates="metadata_entries", lazy="selectin")
+    metadata_type: Mapped[MetadataType] = relationship(back_populates="entries", lazy="selectin")
 
 
 class ResourceGroup(Base, TimestampMixin):

@@ -96,7 +96,7 @@ async def test_usage_grant_and_input_gates(client):
     tpl = (
         await client.post(
             "/api/v1/templates", headers=admin,
-            json={"name": "nog.py", "category_id": 1, "content": "x"},
+            json={"name": "nog.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     assert (
@@ -127,7 +127,7 @@ async def test_global_total_limit_blocks_usage_and_fetch(client):
     tpl = (
         await client.post(
             "/api/v1/templates", headers=admin,
-            json={"name": "limited.py", "category_id": 1, "content": "x"},
+            json={"name": "limited.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     opid = await _operator_id(client, admin)
@@ -157,7 +157,7 @@ async def test_user_scoped_limit_counts_only_that_user(client):
     tpl = (
         await client.post(
             "/api/v1/templates", headers=admin,
-            json={"name": "scoped.py", "category_id": 1, "content": "x"},
+            json={"name": "scoped.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     opid = await _operator_id(client, admin)

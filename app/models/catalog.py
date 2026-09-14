@@ -2,8 +2,8 @@
 
 Terminology rule: `template` everywhere, never `script`.
 Templates are stored as JSON data (``content`` JSON column) and structure
-is validated against ``input_schema`` (per template) or, as a fallback,
-the category ``schema_hint`` — same mechanism as resource data validation.
+is validated against the owning category ``input_schema`` — same mechanism
+as resource data / metadata validation.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ class TemplateCategory(Base, TimestampMixin, ActiveMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    schema_hint: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    input_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     templates: Mapped[list[Template]] = relationship(
         back_populates="category", cascade="all, delete-orphan", lazy="selectin"
@@ -39,7 +39,6 @@ class Template(Base, TimestampMixin, ActiveMixin):
         ForeignKey("template_categories.id", ondelete="RESTRICT"), index=True
     )
     content: Mapped[Any] = mapped_column(JSON, nullable=False)
-    input_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

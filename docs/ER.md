@@ -1,9 +1,11 @@
 # Database ER — Template Management PoC
 
-Templates store JSON ``content`` validated against ``input_schema`` (or the
-category ``schema_hint``); resources store JSON ``data`` validated against
-their ``resource_types.schema``. Statistics use per-principal grants
-(``statistic_grants`` → user/role), not permission codes.
+Templates store JSON ``content`` validated against their category
+``input_schema``; resources store JSON ``data`` validated against their
+``resource_types.schema``; resource metadata entries store JSON ``data``
+validated against their ``metadata_types.schema`` (multiple per resource).
+Statistics use per-principal grants (``statistic_grants`` → user/role),
+not permission codes.
 
 ```mermaid
 erDiagram
@@ -15,6 +17,8 @@ erDiagram
     template_categories ||--o{ templates : contains
     users ||--o{ templates : creates
     resource_types ||--o{ resources : types
+    metadata_types ||--o{ resource_metadata : types
+    resources ||--o{ resource_metadata : has
     resources ||--o{ resource_group_members : in
     resource_groups ||--o{ resource_group_members : contains
     resource_groups ||--o{ group_assignments : assigned
@@ -39,10 +43,13 @@ Text version:
 [roles] 1---* [role_permissions] *---1 [permissions]
 [users] 1---* [user_roles] *---1 [roles]
 [users] 1---* [auth_identities]
-[template_categories] 1---* [templates] / [users] 1---* [templates] (created_by)
-  templates.content JSON validated by input_schema else category schema_hint
+[template_categories(input_schema)] 1---* [templates] / [users] 1---* [templates] (created_by)
+  templates.content JSON validated by category input_schema
 [resource_types] 1---* [resources] (resource.data JSON validated by type schema)
-  e.g. mobile_device {"udid":"ZY323S5GHW","nombre":"Moto G6 3","plataforma":"android",...}
+  e.g. mobile_device {"udid":"ZY323S5GHW","nombre":"Moto G6 3","plataforma":"android","version_plataforma":"8.0.0","descripcion":"random device"}
+[metadata_types] 1---* [resource_metadata] *---1 [resources] (metadata.data JSON validated by type schema)
+  e.g. monitor {"monitor":"monitor-01","nodo":"nodo-lab","hostname":"moto-g6-3.lab","host":"10.0.0.31","servidor_log":"logs.lab.local"}
+  (a resource can have multiple metadata entries, one per type)
 [resources] 1---* [resource_group_members] *---1 [resource_groups]
 [resource_groups] 1---* [group_assignments] -> principal(user|role)
 [templates] 1---* [template_grants] -> principal(user|role|group)
@@ -63,5 +70,5 @@ Notes:
   Statistic visibility is grant-only (per user/role).
 - `activity_logs` is append-only (no update/delete API; read-only in `/admin`).
 - Schema change note: delete pre-existing `data/app.db` before reseeding
-  (template content TEXT→JSON, resources collapsed to data JSON + types,
+  (category input_schema, resources split into data JSON + typed metadata,
   `statistics_definitions.required_permission_code` removed).

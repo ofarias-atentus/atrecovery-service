@@ -1,9 +1,13 @@
-"""Resource / type / group schemas (Pydantic v2).
+"""Resource / type / metadata / group schemas (Pydantic v2).
 
-Resources are ``id / name / identifier / type + data JSON`` — all device
+Resources are ``id / name / identifier / type + data JSON`` — device
 details live inside ``data`` (e.g. mobile device
 ``{"udid": ..., "nombre": ..., "plataforma": "android", ...}``) and are
 validated against the owning ``ResourceType.schema`` when present.
+
+Metadata is stored separately: each ``ResourceMetadata`` entry has its own
+type (``MetadataType`` with a JSON schema) and ``data`` JSON, and a resource
+can have multiple metadata entries.
 """
 from typing import Any, Literal
 
@@ -56,6 +60,57 @@ class ResourceUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class MetadataTypeCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=64, examples=["monitor"])
+    description: str | None = None
+    # NOTE: attribute is `schema_def` (alias `schema`) to avoid shadowing
+    # BaseModel.schema and the resulting UserWarning. JSON API stays `schema`.
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool = True
+
+
+class MetadataTypeUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    description: str | None = None
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool | None = None
+
+
+class MetadataTypeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    name: str
+    description: str | None = None
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool
+
+
+class ResourceMetadataCreate(BaseModel):
+    metadata_type_id: int | None = Field(default=None)
+    metadata_type: str | None = Field(
+        default=None, min_length=1, max_length=64, examples=["monitor"]
+    )
+    data: dict[str, Any] | None = None
+
+
+class ResourceMetadataUpdate(BaseModel):
+    data: dict[str, Any] | None = None
+
+
+class ResourceMetadataRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    resource_id: int
+    metadata_type_id: int
+    metadata_type_name: str = ""
+    data: dict[str, Any] | None = None
+
+
 class ResourceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,6 +122,7 @@ class ResourceRead(BaseModel):
     data: dict[str, Any] | None = None
     is_active: bool
     groups: list[str] = []
+    metadata: list[ResourceMetadataRead] = []
 
 
 class GroupCreate(BaseModel):

@@ -30,9 +30,11 @@ from app.models.identity import (
 )
 from app.models.resources import (
     GroupAssignment,
+    MetadataType,
     Resource,
     ResourceGroup,
     ResourceGroupMember,
+    ResourceMetadata,
     ResourceType,
 )
 from app.models.stats import StatisticDefinition, StatisticGrant
@@ -154,6 +156,14 @@ class ResourceTypeAdmin(_Base, model=ResourceType):
     pass
 
 
+class MetadataTypeAdmin(_Base, model=MetadataType):
+    pass
+
+
+class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
+    pass
+
+
 class ResourceGroupAdmin(_Base, model=ResourceGroup):
     pass
 
@@ -208,7 +218,7 @@ class DocsLinkView(BaseView):
 _VIEWS = [
     UserAdmin, RoleAdmin, PermissionAdmin, RolePermissionAdmin, UserRoleAdmin,
     AuthIdentityAdmin, TemplateCategoryAdmin, TemplateAdmin, ResourceTypeAdmin,
-    ResourceAdmin, ResourceGroupAdmin,
+    MetadataTypeAdmin, ResourceMetadataAdmin, ResourceAdmin, ResourceGroupAdmin,
     ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
     ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin, UsageLimitAdmin,
     ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin, StatisticDefinitionAdmin,

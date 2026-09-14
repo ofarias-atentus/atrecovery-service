@@ -40,7 +40,7 @@ async def test_ungranted_template_denied_then_direct_grant_allows(client):
         await client.post(
             "/api/v1/templates",
             headers=admin,
-            json={"name": "secret.py", "category_id": 1, "content": "top secret"},
+            json={"name": "secret.py", "category_id": 1, "content": {"source": "top secret"}},
         )
     ).json()
     # filtered from list, 403 on detail + fetch (operator HAS template:view/use codes)
@@ -146,7 +146,7 @@ async def test_superuser_bypass_and_missing_objects(client):
         await client.post(
             "/api/v1/templates",
             headers=admin,
-            json={"name": "hidden.py", "category_id": 1, "content": "x"},
+            json={"name": "hidden.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     # superuser sees everything without grants

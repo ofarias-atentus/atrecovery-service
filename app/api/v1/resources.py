@@ -1,8 +1,12 @@
-"""Resources router: typed JSON-data resources.
+"""Resources router: typed JSON-data resources + typed metadata.
 
 Resources are ``id / name / identifier / type + data JSON``. ``data`` is
 validated against the owning ``ResourceType.schema`` when present (same
-mechanism as template content validation).
+mechanism as template content and metadata validation).
+
+Metadata lives separately: each ``ResourceMetadata`` entry has its own
+``MetadataType`` (JSON schema) and ``data`` JSON; a resource can have
+multiple metadata entries.
 
 Read: resource:view code + object grant (direct or via granted group).
 Write: resource:manage. DELETE is a soft deactivate (is_active=False).
@@ -14,8 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import require_permission
 from app.db.session import get_db
 from app.models.identity import User
-from app.models.resources import Resource, ResourceType
-from app.schemas.resources import ResourceCreate, ResourceRead, ResourceUpdate
+from app.models.resources import MetadataType, Resource, ResourceMetadata, ResourceType
+from app.schemas.resources import (
+    ResourceCreate,
+    ResourceMetadataCreate,
+    ResourceMetadataRead,
+    ResourceMetadataUpdate,
+    ResourceRead,
+    ResourceUpdate,
+)
 from app.services.rbac import require_resource_access, resource_access_map
 from app.services.validation import validate_json_data
 
@@ -23,6 +34,16 @@ router = APIRouter()
 VIEW = require_permission("resource:view")
 MANAGE = require_permission("resource:manage")
 VIEW_GRANT = require_resource_access("view")
+
+
+def _meta_to_read(m: ResourceMetadata) -> ResourceMetadataRead:
+    return ResourceMetadataRead(
+        id=m.id,
+        resource_id=m.resource_id,
+        metadata_type_id=m.metadata_type_id,
+        metadata_type_name=m.metadata_type.name if m.metadata_type else "",
+        data=m.data,
+    )
 
 
 def _to_read(r: Resource) -> ResourceRead:
@@ -35,6 +56,7 @@ def _to_read(r: Resource) -> ResourceRead:
         data=r.data,
         is_active=r.is_active,
         groups=[g.name for g in r.groups],
+        metadata=[_meta_to_read(m) for m in (r.metadata_entries or [])],
     )
 
 
@@ -54,6 +76,25 @@ async def _resolve_type(db: AsyncSession, resource_type_id: int | None) -> Resou
     ).scalar_one_or_none()
     if t is None:
         raise HTTPException(status_code=404, detail="resource type not found")
+    return t
+
+
+async def _resolve_metadata_type(
+    db: AsyncSession, body: ResourceMetadataCreate
+) -> MetadataType:
+    t: MetadataType | None = None
+    if body.metadata_type_id is not None:
+        t = (
+            await db.execute(
+                select(MetadataType).where(MetadataType.id == body.metadata_type_id)
+            )
+        ).scalar_one_or_none()
+    elif body.metadata_type:
+        t = (
+            await db.execute(select(MetadataType).where(MetadataType.name == body.metadata_type))
+        ).scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=404, detail="metadata type not found")
     return t
 
 
@@ -137,4 +178,109 @@ async def delete_resource(
 ) -> None:
     r = await _get_or_404(db, resource_id)
     r.is_active = False
+    await db.commit()
+
+
+@router.get(
+    "/{resource_id}/metadata",
+    response_model=list[ResourceMetadataRead],
+    summary="List resource metadata entries",
+)
+async def list_metadata(r: Resource = Depends(VIEW_GRANT)) -> list[ResourceMetadataRead]:
+    return [_meta_to_read(m) for m in (r.metadata_entries or [])]
+
+
+@router.post(
+    "/{resource_id}/metadata",
+    response_model=ResourceMetadataRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach a typed metadata entry to a resource",
+)
+async def attach_metadata(
+    resource_id: int,
+    body: ResourceMetadataCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(MANAGE),
+) -> ResourceMetadataRead:
+    r = await _get_or_404(db, resource_id)
+    t = await _resolve_metadata_type(db, body)
+    validate_json_data(body.data, t.schema, label="metadata.data")
+    dup = (
+        await db.execute(
+            select(ResourceMetadata).where(
+                ResourceMetadata.resource_id == r.id,
+                ResourceMetadata.metadata_type_id == t.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if dup is not None:
+        raise HTTPException(status_code=409, detail="metadata of this type already attached")
+    m = ResourceMetadata(resource_id=r.id, metadata_type_id=t.id, data=body.data)
+    db.add(m)
+    await db.commit()
+    await db.refresh(m)
+    # reload with type relationship for the computed name field
+    fresh = (
+        await db.execute(select(ResourceMetadata).where(ResourceMetadata.id == m.id))
+    ).scalar_one()
+    return _meta_to_read(fresh)
+
+
+@router.patch(
+    "/{resource_id}/metadata/{metadata_id}",
+    response_model=ResourceMetadataRead,
+    summary="Update a resource metadata entry",
+)
+async def update_metadata(
+    resource_id: int,
+    metadata_id: int,
+    body: ResourceMetadataUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(MANAGE),
+) -> ResourceMetadataRead:
+    m = (
+        await db.execute(
+            select(ResourceMetadata).where(
+                ResourceMetadata.id == metadata_id,
+                ResourceMetadata.resource_id == resource_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if m is None:
+        raise HTTPException(status_code=404, detail="metadata entry not found")
+    if body.data is not None:
+        t = (
+            await db.execute(select(MetadataType).where(MetadataType.id == m.metadata_type_id))
+        ).scalar_one()
+        validate_json_data(body.data, t.schema, label="metadata.data")
+        m.data = body.data
+        await db.commit()
+    fresh = (
+        await db.execute(select(ResourceMetadata).where(ResourceMetadata.id == m.id))
+    ).scalar_one()
+    return _meta_to_read(fresh)
+
+
+@router.delete(
+    "/{resource_id}/metadata/{metadata_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Detach a metadata entry from a resource",
+)
+async def detach_metadata(
+    resource_id: int,
+    metadata_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(MANAGE),
+) -> None:
+    m = (
+        await db.execute(
+            select(ResourceMetadata).where(
+                ResourceMetadata.id == metadata_id,
+                ResourceMetadata.resource_id == resource_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if m is None:
+        raise HTTPException(status_code=404, detail="metadata entry not found")
+    await db.delete(m)
     await db.commit()

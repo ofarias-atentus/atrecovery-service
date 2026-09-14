@@ -58,7 +58,7 @@ async def test_grant_and_group_changes_logged(client):
     tpl = (
         await client.post(
             "/api/v1/templates", headers=admin,
-            json={"name": "audited.py", "category_id": 1, "content": "x"},
+            json={"name": "audited.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     g = (
@@ -102,7 +102,7 @@ async def test_log_aggregation_most_used_and_last_fetch(client):
     other = (
         await client.post(
             "/api/v1/templates", headers=admin,
-            json={"name": "other.py", "category_id": 1, "content": "y"},
+            json={"name": "other.py", "category_id": 1, "content": {"source": "y"}},
         )
     ).json()
     await client.post(

@@ -2,9 +2,10 @@
 
 - Identity: permissions (no stats permission codes), roles admin/operator,
   users admin/admin123, operator/operator123 with local auth identities.
-- Templates: categories python/json; hello.py stored as JSON content with
-  input_schema validation.
-- Resources: types (mobile_device) + Moto G6 resource with data JSON,
+- Templates: categories python/json define input_schema; hello.py stored as
+  JSON content validated against its category.
+- Resources: types (mobile_device) + Moto G6 resource with pure device data
+  JSON; typed metadata (monitor) stored separately, multiple per resource;
   lab-phones group assigned to the operator role.
 - Grants: operator role can view/use hello.py + lab-phones group.
 - Usage: modes direct/scheduler/voucher + demo limit (hello.py, 10/day).
@@ -34,9 +35,11 @@ from app.models.grants import ResourceGrant, TemplateGrant
 from app.models.identity import AuthIdentity, Permission, Role, RolePermission, User, UserRole
 from app.models.resources import (
     GroupAssignment,
+    MetadataType,
     Resource,
     ResourceGroup,
     ResourceGroupMember,
+    ResourceMetadata,
     ResourceType,
 )
 from app.models.stats import StatisticDefinition, StatisticGrant
@@ -164,6 +167,7 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "users": len(USER_DEFS),
         "categories": len(CATEGORY_DEFS),
         "resource_types": len(RESOURCE_TYPE_DEFS),
+        "metadata_types": len(METADATA_TYPE_DEFS),
         "grants": 2,
         "modes": len(MODE_DEFS),
         "limits": 1,
@@ -175,9 +179,25 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
     return counts
 
 
-CATEGORY_DEFS: list[tuple[str, str]] = [
-    ("python", "Python templates (JSON content relayed to processor services)"),
-    ("json", "JSON templates (structured payloads relayed to processor services)"),
+CATEGORY_DEFS: list[dict] = [
+    {
+        "name": "python",
+        "description": "Python templates (JSON content relayed to processor services)",
+        "input_schema": {
+            "type": "object",
+            "required": ["source"],
+            "properties": {
+                "language": {"type": "string"},
+                "source": {"type": "string"},
+                "description": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "json",
+        "description": "JSON templates (structured payloads relayed to processor services)",
+        "input_schema": {"type": "object"},
+    },
 ]
 
 TEMPLATE_DEFS: list[dict] = [
@@ -189,15 +209,6 @@ TEMPLATE_DEFS: list[dict] = [
             "language": "python",
             "source": 'print("hello from template hello.py")\n',
             "description": "Hello template",
-        },
-        "input_schema": {
-            "type": "object",
-            "required": ["source"],
-            "properties": {
-                "language": {"type": "string"},
-                "source": {"type": "string"},
-                "description": {"type": "string"},
-            },
         },
     },
 ]
@@ -215,6 +226,19 @@ RESOURCE_TYPE_DEFS: list[dict] = [
                 "plataforma": {"type": "string"},
                 "version_plataforma": {"type": "string"},
                 "descripcion": {"type": "string"},
+            },
+        },
+    },
+]
+
+METADATA_TYPE_DEFS: list[dict] = [
+    {
+        "name": "monitor",
+        "description": "Monitoring attachment (monitor, nodo, hostname, ...)",
+        "schema": {
+            "type": "object",
+            "required": ["monitor", "nodo", "hostname", "host", "servidor_log"],
+            "properties": {
                 "monitor": {"type": "string"},
                 "nodo": {"type": "string"},
                 "hostname": {"type": "string"},
@@ -236,12 +260,19 @@ RESOURCE_DEFS: list[dict] = [
             "plataforma": "android",
             "version_plataforma": "8.0.0",
             "descripcion": "random device",
-            "monitor": "monitor-01",
-            "nodo": "nodo-lab",
-            "hostname": "moto-g6-3.lab",
-            "host": "10.0.0.31",
-            "servidor_log": "logs.lab.local",
         },
+        "metadata": [
+            {
+                "metadata_type": "monitor",
+                "data": {
+                    "monitor": "monitor-01",
+                    "nodo": "nodo-lab",
+                    "hostname": "moto-g6-3.lab",
+                    "host": "10.0.0.31",
+                    "servidor_log": "logs.lab.local",
+                },
+            },
+        ],
     },
 ]
 
@@ -251,17 +282,25 @@ GROUP_DEFS: list[dict] = [
 
 
 async def seed_catalog(db: AsyncSession) -> None:
-    """Idempotent catalog + resource seed (JSON content/data + types)."""
+    """Idempotent catalog + resource seed (category input_schema, typed metadata)."""
     admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one()
 
     cats: dict[str, TemplateCategory] = {}
-    for name, desc in CATEGORY_DEFS:
-        cat = (await db.execute(select(TemplateCategory).where(TemplateCategory.name == name))).scalar_one_or_none()
+    for cdef in CATEGORY_DEFS:
+        cat = (await db.execute(select(TemplateCategory).where(TemplateCategory.name == cdef["name"]))).scalar_one_or_none()
         if cat is None:
-            cat = TemplateCategory(name=name, description=desc)
+            cat = TemplateCategory(
+                name=cdef["name"], description=cdef["description"],
+                input_schema=cdef.get("input_schema"),
+            )
             db.add(cat)
             await db.flush()
-        cats[name] = cat
+        else:
+            # Migrate legacy schema_hint -> input_schema.
+            legacy_hint = getattr(cat, "schema_hint", None)
+            if cat.input_schema is None:
+                cat.input_schema = cdef.get("input_schema") or legacy_hint
+        cats[cdef["name"]] = cat
 
     for tdef in TEMPLATE_DEFS:
         existing = (
@@ -276,7 +315,6 @@ async def seed_catalog(db: AsyncSession) -> None:
                     version=tdef["version"],
                     category_id=cats[tdef["category"]].id,
                     content=tdef["content"],
-                    input_schema=tdef["input_schema"],
                     created_by=admin.id,
                 )
             )
@@ -287,8 +325,6 @@ async def seed_catalog(db: AsyncSession) -> None:
                     "language": "python",
                     "source": existing.content,
                 }
-                if existing.input_schema is None:
-                    existing.input_schema = tdef["input_schema"]
     await db.flush()
 
     types: dict[str, ResourceType] = {}
@@ -300,7 +336,22 @@ async def seed_catalog(db: AsyncSession) -> None:
             )
             db.add(t)
             await db.flush()
+        else:
+            t.schema = tdef["schema"]
         types[tdef["name"]] = t
+
+    mtypes: dict[str, MetadataType] = {}
+    for tdef in METADATA_TYPE_DEFS:
+        t = (await db.execute(select(MetadataType).where(MetadataType.name == tdef["name"]))).scalar_one_or_none()
+        if t is None:
+            t = MetadataType(
+                name=tdef["name"], description=tdef["description"], schema=tdef["schema"]
+            )
+            db.add(t)
+            await db.flush()
+        else:
+            t.schema = tdef["schema"]
+        mtypes[tdef["name"]] = t
 
     resources: dict[str, Resource] = {}
     for rdef in RESOURCE_DEFS:
@@ -315,21 +366,30 @@ async def seed_catalog(db: AsyncSession) -> None:
             db.add(r)
             await db.flush()
         else:
-            # Migrate legacy columns (platform/extra/...) into data JSON when present.
-            if not r.data:
-                legacy_data = dict(rdef["data"])
-                for attr in ("platform", "platform_version", "description", "extra"):
-                    if hasattr(r, attr):
-                        try:
-                            val = getattr(r, attr)
-                        except AttributeError:
-                            continue
-                        if val and attr not in legacy_data:
-                            legacy_data[attr] = val
-                r.data = legacy_data
+            # Canonical device-only data (drop legacy monitor keys if present).
+            r.data = dict(rdef["data"])
             if not r.resource_type_id:
                 r.resource_type_id = types[rdef["resource_type"]].id
         resources[rdef["identifier"]] = r
+        await db.flush()
+        for mdef in rdef.get("metadata", []):
+            mt = mtypes[mdef["metadata_type"]]
+            link = (
+                await db.execute(
+                    select(ResourceMetadata).where(
+                        ResourceMetadata.resource_id == r.id,
+                        ResourceMetadata.metadata_type_id == mt.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if link is None:
+                db.add(
+                    ResourceMetadata(
+                        resource_id=r.id, metadata_type_id=mt.id, data=mdef["data"]
+                    )
+                )
+            else:
+                link.data = dict(mdef["data"])
     await db.flush()
 
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
