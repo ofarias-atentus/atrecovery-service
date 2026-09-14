@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import sys
 
-import httpx
+import httpx2
 
 BASE = os.environ.get("DEMO_BASE_URL", "http://127.0.0.1:8000")
 PROCESSOR_TOKEN = os.environ.get("PROCESSOR_TOKEN", "lab-runner-demo-token")
@@ -27,7 +27,7 @@ def check(label: str, condition: bool, detail: str = "") -> None:
 
 
 def main() -> int:
-    client = httpx.Client(base_url=BASE, timeout=15.0)
+    client = httpx2.Client(base_url=BASE, timeout=15.0)
 
     def login(username: str, password: str) -> dict[str, str]:
         r = client.post(

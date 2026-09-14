@@ -1,7 +1,7 @@
 import os
 from collections.abc import AsyncGenerator
 
-import httpx
+import httpx2
 import pytest
 
 from app.core.config import get_settings
@@ -10,7 +10,7 @@ from app.db.session import dispose_engine, get_session_factory, init_db
 
 
 @pytest.fixture
-async def client(tmp_path, monkeypatch) -> AsyncGenerator[httpx.AsyncClient, None]:
+async def client(tmp_path, monkeypatch) -> AsyncGenerator[httpx2.AsyncClient, None]:
     """Isolated app client: temp SQLite file + seed, so tests never touch ./data/app.db."""
     db_file = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_file}")
@@ -22,15 +22,15 @@ async def client(tmp_path, monkeypatch) -> AsyncGenerator[httpx.AsyncClient, Non
     await init_db()
     async with get_session_factory()() as session:
         await seed_all(session)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+    transport = httpx2.ASGITransport(app=app)
+    async with httpx2.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     await dispose_engine()
     get_settings.cache_clear()
     assert os.environ.get("DATABASE_URL", "").startswith("sqlite")  # sanity, no-op
 
 
-async def login(client: httpx.AsyncClient, username: str, password: str) -> dict:
+async def login(client: httpx2.AsyncClient, username: str, password: str) -> dict:
     r = await client.post(
         "/api/v1/auth/token", data={"username": username, "password": password}
     )

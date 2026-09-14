@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+import httpx2
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,9 +110,9 @@ async def fetch_external(query_config: dict[str, Any], params: dict[str, str]) -
     method = str(query_config.get("method", "GET")).upper()
     headers = query_config.get("headers") or {}
     try:
-        async with httpx.AsyncClient(timeout=EXTERNAL_TIMEOUT) as client:
+        async with httpx2.AsyncClient(timeout=EXTERNAL_TIMEOUT) as client:
             response = await client.request(method, url, params=params, headers=headers)
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail=f"external stat fetch failed: {e}"
         ) from e

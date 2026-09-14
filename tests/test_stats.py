@@ -1,5 +1,5 @@
 """Stage 7 tests: internal resolvers, mocked external fetch, permission gates."""
-import httpx
+import httpx2
 
 from tests.conftest import auth_headers, login
 
@@ -48,7 +48,7 @@ class _FakeClient:
 
 class _FailingClient(_FakeClient):
     async def request(self, method, url, params=None, headers=None):
-        raise httpx.ConnectError("down")
+        raise httpx2.ConnectError("down")
 
 
 async def test_most_used_template(client):
@@ -107,7 +107,7 @@ async def test_beacon_success_rate(client):
 async def test_external_stat_defined_without_code_change(client, monkeypatch):
     admin, op = await _admin(client), await _operator(client)
     monkeypatch.setattr(
-        "app.services.stats_svc.httpx.AsyncClient", _FakeClient
+        "app.services.stats_svc.httpx2.AsyncClient", _FakeClient
     )
     created = (
         await client.post(
@@ -138,7 +138,7 @@ async def test_external_stat_defined_without_code_change(client, monkeypatch):
 
 async def test_external_fetch_failure_is_502(client, monkeypatch):
     admin = await _admin(client)
-    monkeypatch.setattr("app.services.stats_svc.httpx.AsyncClient", _FailingClient)
+    monkeypatch.setattr("app.services.stats_svc.httpx2.AsyncClient", _FailingClient)
     await client.post(
         "/api/v1/stats/definitions", headers=admin,
         json={"name": "downstream", "source_type": "external",
