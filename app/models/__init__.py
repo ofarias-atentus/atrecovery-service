@@ -21,6 +21,7 @@ from app.models.resources import (  # noqa: F401
     ResourceGroup,
     ResourceGroupMember,
     ResourceMetadata,
+    ResourceTemplate,
     ResourceType,
 )
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit  # noqa: F401

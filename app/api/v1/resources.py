@@ -8,6 +8,13 @@ Metadata lives separately: each ``ResourceMetadata`` entry has its own
 ``MetadataType`` (JSON schema) and ``data`` JSON; a resource can have
 multiple metadata entries.
 
+Templates are associated per resource (``resource_templates`` join rows):
+a template can only be executed against an associated resource (closed
+world — a resource with no associations runs nothing). Discovery via
+``GET /{id}/templates`` lists associated templates the caller holds a
+use-grant on; execution itself stays ``POST /usages`` with a mandatory
+``resource_id``.
+
 Read: resource:view code + object grant (direct or via granted group).
 Write: resource:manage. DELETE is a soft deactivate (is_active=False).
 """
@@ -15,10 +22,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_permission
+from app.core.deps import get_current_user, require_permission
 from app.db.session import get_db
+from app.models.catalog import Template
 from app.models.identity import User
-from app.models.resources import MetadataType, Resource, ResourceMetadata, ResourceType
+from app.models.resources import (
+    MetadataType,
+    Resource,
+    ResourceMetadata,
+    ResourceTemplate,
+    ResourceType,
+)
+from app.schemas.catalog import TemplateRead
 from app.schemas.resources import (
     ResourceCreate,
     ResourceMetadataCreate,
@@ -26,8 +41,13 @@ from app.schemas.resources import (
     ResourceMetadataUpdate,
     ResourceRead,
     ResourceUpdate,
+    TemplateAttach,
 )
-from app.services.rbac import require_resource_access, resource_access_map
+from app.services.rbac import (
+    granted_template_ids,
+    require_resource_access,
+    resource_access_map,
+)
 from app.services.validation import validate_json_data
 
 router = APIRouter()
@@ -283,4 +303,117 @@ async def detach_metadata(
     if m is None:
         raise HTTPException(status_code=404, detail="metadata entry not found")
     await db.delete(m)
+    await db.commit()
+
+
+def _template_to_read(t: Template) -> TemplateRead:
+    return TemplateRead(
+        id=t.id,
+        name=t.name,
+        version=t.version,
+        category_id=t.category_id,
+        category_name=t.category.name if t.category else "",
+        content=t.content,
+        is_active=t.is_active,
+        created_by=t.created_by,
+        created_at=t.created_at,
+        updated_at=t.updated_at,
+    )
+
+
+@router.get(
+    "/{resource_id}/templates",
+    response_model=list[TemplateRead],
+    summary="List templates associated with this resource that the caller may use",
+)
+async def list_resource_templates(
+    r: Resource = Depends(VIEW_GRANT),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[TemplateRead]:
+    """Resource-first discovery: associated templates ∩ caller's use-grants."""
+    associated = set(
+        (
+            await db.execute(
+                select(ResourceTemplate.template_id).where(
+                    ResourceTemplate.resource_id == r.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not associated:
+        return []
+    if (usable := await granted_template_ids(db, user, "use")) is None:
+        usable = associated  # superuser: every association is executable
+    else:
+        usable = associated & usable
+    if not usable:
+        return []
+    rows = (
+        await db.execute(
+            select(Template)
+            .where(Template.id.in_(usable), Template.is_active.is_(True))
+            .order_by(Template.name, Template.version)
+        )
+    ).scalars().all()
+    return [_template_to_read(t) for t in rows]
+
+
+@router.post(
+    "/{resource_id}/templates",
+    response_model=TemplateRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Associate a template with a resource",
+)
+async def attach_template(
+    resource_id: int,
+    body: TemplateAttach,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(MANAGE),
+) -> TemplateRead:
+    r = await _get_or_404(db, resource_id)
+    t = (
+        await db.execute(select(Template).where(Template.id == body.template_id))
+    ).scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=404, detail="template not found")
+    dup = (
+        await db.execute(
+            select(ResourceTemplate).where(
+                ResourceTemplate.resource_id == r.id,
+                ResourceTemplate.template_id == t.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if dup is not None:
+        raise HTTPException(status_code=409, detail="template already associated")
+    db.add(ResourceTemplate(resource_id=r.id, template_id=t.id))
+    await db.commit()
+    return _template_to_read(t)
+
+
+@router.delete(
+    "/{resource_id}/templates/{template_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Dissociate a template from a resource",
+)
+async def detach_template(
+    resource_id: int,
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(MANAGE),
+) -> None:
+    link = (
+        await db.execute(
+            select(ResourceTemplate).where(
+                ResourceTemplate.resource_id == resource_id,
+                ResourceTemplate.template_id == template_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="association not found")
+    await db.delete(link)
     await db.commit()

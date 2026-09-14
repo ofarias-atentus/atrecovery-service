@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.catalog import Template
 from app.models.identity import User, UserRole
-from app.models.resources import Resource, ResourceGroupMember
+from app.models.resources import Resource, ResourceGroupMember, ResourceTemplate
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
 from app.schemas.usage import UsageCreate
 from app.services.rbac import has_resource_access, has_template_access, user_group_ids
@@ -136,7 +136,13 @@ async def get_mode_or_422(db: AsyncSession, code: str) -> ExecutionMode:
 
 
 async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> TemplateUsage:
-    """Validate grants + limits, then record one relayed usage."""
+    """Validate grants + resource association + limits, then record one usage.
+
+    Templates never execute standalone: every usage names a resource, and the
+    (template, resource) pair must be associated (closed world — a resource
+    with no associations runs nothing). Enforced for everyone, superusers
+    included, since association is a compatibility fact, not a permission.
+    """
     mode = await get_mode_or_422(db, body.mode)
     t = (
         await db.execute(select(Template).where(Template.id == body.template_id))
@@ -147,16 +153,28 @@ async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> Templ
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="no use grant for this template"
         )
-    if body.resource_id is not None:
-        r = (
-            await db.execute(select(Resource).where(Resource.id == body.resource_id))
-        ).scalar_one_or_none()
-        if r is None:
-            raise HTTPException(status_code=404, detail="resource not found")
-        if not await has_resource_access(db, user, r.id, "use"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="no use grant for this resource"
+    r = (
+        await db.execute(select(Resource).where(Resource.id == body.resource_id))
+    ).scalar_one_or_none()
+    if r is None:
+        raise HTTPException(status_code=404, detail="resource not found")
+    if not await has_resource_access(db, user, r.id, "use"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="no use grant for this resource"
+        )
+    link = (
+        await db.execute(
+            select(ResourceTemplate).where(
+                ResourceTemplate.resource_id == r.id,
+                ResourceTemplate.template_id == t.id,
             )
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="template not associated with this resource",
+        )
     if mode.code == "scheduler" and body.schedule_at is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

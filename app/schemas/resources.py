@@ -111,6 +111,12 @@ class ResourceMetadataRead(BaseModel):
     data: dict[str, Any] | None = None
 
 
+class TemplateAttach(BaseModel):
+    """Associate one template with a resource (resource-first execution)."""
+
+    template_id: int
+
+
 class ResourceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

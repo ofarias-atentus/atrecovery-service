@@ -35,6 +35,7 @@ from app.models.resources import (
     ResourceGroup,
     ResourceGroupMember,
     ResourceMetadata,
+    ResourceTemplate,
     ResourceType,
 )
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
@@ -163,6 +164,10 @@ class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
     pass
 
 
+class ResourceTemplateAdmin(_Base, model=ResourceTemplate):
+    pass
+
+
 class ResourceGroupAdmin(_Base, model=ResourceGroup):
     pass
 
@@ -209,7 +214,8 @@ class DocsLinkView(BaseView):
 _VIEWS = [
     UserAdmin, RoleAdmin, PermissionAdmin, RolePermissionAdmin, UserRoleAdmin,
     AuthIdentityAdmin, TemplateCategoryAdmin, TemplateAdmin, ResourceTypeAdmin,
-    MetadataTypeAdmin, ResourceMetadataAdmin, ResourceAdmin, ResourceGroupAdmin,
+    MetadataTypeAdmin, ResourceMetadataAdmin, ResourceTemplateAdmin, ResourceAdmin,
+    ResourceGroupAdmin,
     ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
     ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin, UsageLimitAdmin,
     ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin,

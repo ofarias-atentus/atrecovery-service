@@ -15,6 +15,8 @@ erDiagram
     template_categories ||--o{ templates : contains
     users ||--o{ templates : creates
     resource_types ||--o{ resources : types
+    resources ||--o{ resource_templates : allows
+    templates ||--o{ resource_templates : allowed_on
     metadata_types ||--o{ resource_metadata : types
     resources ||--o{ resource_metadata : has
     resources ||--o{ resource_group_members : in
@@ -44,6 +46,8 @@ Text version:
   templates.content JSON validated by category input_schema
 [resource_types] 1---* [resources] (resource.data JSON validated by type schema)
   e.g. mobile_device {"udid":"ZY323S5GHW","nombre":"Moto G6 3","plataforma":"android","version_plataforma":"8.0.0","descripcion":"random device"}
+[resources] *---* [templates] via resource_templates (per-template associations;
+  a template executes only against an associated resource — closed world)
 [metadata_types] 1---* [resource_metadata] *---1 [resources] (metadata.data JSON validated by type schema)
   e.g. monitor {"monitor":"monitor-01","nodo":"nodo-lab","hostname":"moto-g6-3.lab","host":"10.0.0.31","servidor_log":"logs.lab.local"}
   (a resource can have multiple metadata entries, one per type)

@@ -25,7 +25,7 @@ class ExecutionMode(Base):
 
 
 class TemplateUsage(Base):
-    """One relayed use of a template, optionally targeting a resource."""
+    """One relayed use of a template against a resource (resource mandatory)."""
 
     __tablename__ = "template_usages"
 
@@ -33,8 +33,8 @@ class TemplateUsage(Base):
     template_id: Mapped[int] = mapped_column(
         ForeignKey("templates.id", ondelete="CASCADE"), index=True
     )
-    resource_id: Mapped[int | None] = mapped_column(
-        ForeignKey("resources.id", ondelete="SET NULL"), nullable=True, index=True
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("resources.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     requested_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True

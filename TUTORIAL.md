@@ -177,20 +177,31 @@ Takeaway: **members** say what's inside, **assignments** say who gets it, **gran
 switch access on. The seed's `lab-phones` is exactly this pattern pre-built: Moto G6
 inside, assigned + granted to the `operator` role.
 
-## 6. Relay usages — direct, scheduler, voucher
+## 6. Execute from the resource — direct, scheduler, voucher
 
-This is the "execution is out-of-scope" loop: you record a request, an external
-service later reports the result. Three modes exist (`GET /api/v1/execution-modes`
-lists them); all three need `template:use` plus a use-grant on the template.
+This is the "execution is out-of-scope" loop: pick a device, see its templates,
+record a request, and an external service later reports the result. Templates never
+execute standalone — every usage names a `resource_id`, and the pair must be
+**associated** (closed world: unassociated → 422). Three modes exist
+(`GET /api/v1/execution-modes` lists them); all three need `template:use` plus
+use-grants on **both** the template and the resource.
+
+Start resource-first — ask the Moto G6 what it can run (seed associates it with `hello.py`):
+
+```bash
+curl -s http://127.0.0.1:8000/api/v1/resources/$RES/templates \
+  -H "Authorization: Bearer $OP" | python3 -m json.tool
+# → [{"name":"hello.py",...}] — only associated templates you hold a use-grant on
+```
 
 ### 6a. Direct — fire and record (status is `dispatched` right away)
 
-`mode` defaults to `direct`, so the smallest possible usage is just a template id:
+`mode` defaults to `direct`, so the smallest possible usage names template + resource:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL}" | python3 -m json.tool
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES}" | python3 -m json.tool
 # → {"mode":"direct","status":"dispatched","external_dispatch_id":null,...}
 ```
 
@@ -204,13 +215,13 @@ The PoC only records the row — a real scheduler worker would pick it up later
 # Missing schedule_at → 422. Try it to see the guard:
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL,\"mode\":\"scheduler\"}" | python3 -m json.tool
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\"}" | python3 -m json.tool
 # → {"detail":"scheduler mode requires schedule_at"}
 
 # With a date + payload → status stays "pending" until something external acts:
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL,\"mode\":\"scheduler\",\"schedule_at\":\"2030-01-01T00:00:00\",\"payload\":{\"name\":\"ops\"}}" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"scheduler\",\"schedule_at\":\"2030-01-01T00:00:00\",\"payload\":{\"name\":\"ops\"}}" \
   | python3 -m json.tool
 # → {"mode":"scheduler","status":"pending","schedule_at":"2030-01-01T00:00:00","payload":{"name":"ops"},...}
 ```
@@ -218,10 +229,10 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 ### 6c. Voucher — get a dispatch id, then report a beacon
 
 ```bash
-# 1) Operator requests hello.py in voucher mode → you get an external dispatch id V-…
+# 1) Operator runs hello.py on the Moto G6 in voucher mode → external dispatch id V-…
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL,\"mode\":\"voucher\"}" | python3 -m json.tool
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"voucher\"}" | python3 -m json.tool
 # Read "id" and "external_dispatch_id" (starts with V-) from the output, then:
 USAGE=<paste-usage-id>
 
@@ -241,21 +252,31 @@ curl -s "http://127.0.0.1:8000/api/v1/beacons?usage_id=$USAGE" \
   -H "Authorization: Bearer $OP" | python3 -m json.tool
 ```
 
-### 6d. Target a resource (needs a use-grant on it too)
+### 6d. The closed world: associations are enforced, not advisory
 
-Pass `resource_id` to aim a usage at a device. The operator holds a use-grant on the
-`lab-phones` group, so the seed phone works; an ungranted resource gives 403:
+Three rejections to try, one per guard layer (grants are checked before associations):
 
 ```bash
-# Works — Moto G6 3 is in the granted lab-phones group:
+# 403 — secret.py was never granted to the operator (grant check runs first):
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"direct\"}" | python3 -m json.tool
+  -d "{\"template_id\":$SECRET,\"resource_id\":$RES}" | python3 -m json.tool
 
-# 403 — secret.py from step 3 was never granted to the operator:
+# 422 — no resource at all: templates never execute standalone:
 curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
-  -d "{\"template_id\":$SECRET}" | python3 -m json.tool
+  -d "{\"template_id\":$TPL}" | python3 -m json.tool
+
+# 422 — Pixel from §5 runs nothing: associate first (admin), then it executes:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$PIX}" | python3 -m json.tool
+curl -s -X POST http://127.0.0.1:8000/api/v1/resources/$PIX/templates \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL}" | python3 -m json.tool
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$PIX}" | python3 -m json.tool  # → 201
 ```
 
 ### 6e. List usages and watch the limits
@@ -303,6 +324,8 @@ pytest -q
 | `422` creating a template | `content` must satisfy the **category's** `input_schema` (python needs `{"source": ...}`); extra fields like per-template `input_schema` are rejected |
 | `422` creating a resource/metadata | `data` must satisfy the type's `schema` (check `/resource-types` or `/metadata-types`) |
 | `403` on fetch/read | Normal: no grant. Log in as admin and add one (`POST /api/v1/grants/...`) |
+| `422` on usage, missing resource | Usages always name a `resource_id` — templates never execute standalone |
+| `422` on usage, not associated | Pair the template to the device first (`POST /resources/{id}/templates`); empty devices run nothing |
 | `401` on beacons | Beacon auth uses `X-Processor-Token`, not the JWT `Authorization` header |
 | Weird state after pulling changes | Schema changed? `rm -f data/app.db && python -m app.db.seed` and restart |
 

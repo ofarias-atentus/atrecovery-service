@@ -48,9 +48,17 @@ def main() -> int:
     _detail = _content["source"].strip() if isinstance(_content, dict) else str(_content).strip()
     check("operator fetch hello.py", fetch.status_code == 200, _detail)
 
+    # Resource-first: pick the Moto G6 phone, list its executable templates.
+    resources = client.get("/api/v1/resources", headers=operator).json()
+    moto = next(r for r in resources if r["identifier"] == "ZY323S5GHW")
+    runnable = client.get(f"/api/v1/resources/{moto['id']}/templates", headers=operator).json()
+    check("resource lists its executable templates",
+          any(t["name"] == "hello.py" for t in runnable),
+          f"{len(runnable)} associated")
+
     usage = client.post(
         "/api/v1/usages", headers=operator,
-        json={"template_id": hello["id"], "mode": "voucher"},
+        json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "voucher"},
     ).json()
     vid = usage.get("external_dispatch_id", "")
     check("voucher usage returns dispatch id", vid.startswith("V-"), vid)

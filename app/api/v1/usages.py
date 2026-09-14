@@ -1,8 +1,10 @@
 """Template usages router: relay dispatch requests, enforce limits.
 
-POST needs ``template:use`` + a use grant (checked in the service, 403) and
-passes active usage limits (429 when exhausted). Listing/detail is scoped:
-non-admins only see their own usages.
+Templates never execute standalone: POST needs a ``resource_id`` plus
+``template:use`` + use grants on BOTH the template and the resource
+(403 without), and the pair must be associated (422 otherwise — closed
+world). Active usage limits give 429 when exhausted. Listing/detail is
+scoped: non-admins only see their own usages.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select

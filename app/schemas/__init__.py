@@ -36,4 +36,5 @@ from app.schemas.resources import (  # noqa: F401
     ResourceTypeRead,
     ResourceTypeUpdate,
     ResourceUpdate,
+    TemplateAttach,
 )

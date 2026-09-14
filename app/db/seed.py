@@ -38,6 +38,7 @@ from app.models.resources import (
     ResourceGroup,
     ResourceGroupMember,
     ResourceMetadata,
+    ResourceTemplate,
     ResourceType,
 )
 from app.models.usage import ExecutionMode, UsageLimit
@@ -268,6 +269,7 @@ RESOURCE_DEFS: list[dict] = [
                 },
             },
         ],
+        "templates": ["hello.py"],
     },
 ]
 
@@ -385,6 +387,22 @@ async def seed_catalog(db: AsyncSession) -> None:
                 )
             else:
                 link.data = dict(mdef["data"])
+        for tname in rdef.get("templates", []):
+            tpl = (
+                await db.execute(select(Template).where(Template.name == tname))
+            ).scalar_one_or_none()
+            if tpl is None:
+                continue
+            assoc = (
+                await db.execute(
+                    select(ResourceTemplate).where(
+                        ResourceTemplate.resource_id == r.id,
+                        ResourceTemplate.template_id == tpl.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if assoc is None:
+                db.add(ResourceTemplate(resource_id=r.id, template_id=tpl.id))
     await db.flush()
 
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()

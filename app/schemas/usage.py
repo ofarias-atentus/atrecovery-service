@@ -38,7 +38,7 @@ class UsageLimitRead(UsageLimitCreate):
 
 class UsageCreate(BaseModel):
     template_id: int
-    resource_id: int | None = None
+    resource_id: int
     mode: str = "direct"
     schedule_at: datetime | None = None
     payload: dict[str, Any] | None = None
@@ -49,7 +49,7 @@ class UsageRead(BaseModel):
 
     id: int
     template_id: int
-    resource_id: int | None = None
+    resource_id: int
     requested_by: int
     mode: str = "direct"
     status: str

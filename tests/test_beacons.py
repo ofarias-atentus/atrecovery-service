@@ -28,6 +28,11 @@ async def _hello_id(client, headers):
     return next(t for t in tpls if t["name"] == "hello.py")["id"]
 
 
+async def _moto_id(client, headers):
+    res = (await client.get("/api/v1/resources", headers=headers)).json()
+    return next(r for r in res if r["identifier"] == "ZY323S5GHW")["id"]
+
+
 async def test_processor_lifecycle_and_token_shown_once(client):
     admin, op = await _admin(client), await _operator(client)
     created = await _make_processor(client, admin)
@@ -50,8 +55,12 @@ async def test_beacon_report_drives_usage_lifecycle(client):
     admin, op = await _admin(client), await _operator(client)
     proc = await _make_processor(client, admin)
     hello_id = await _hello_id(client, op)
+    moto_id = await _moto_id(client, op)
     usage = (
-        await client.post("/api/v1/usages", headers=op, json={"template_id": hello_id, "mode": "voucher"})
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id, "mode": "voucher"},
+        )
     ).json()
     partial = (
         await client.post(
@@ -70,7 +79,10 @@ async def test_beacon_report_drives_usage_lifecycle(client):
     assert st["status"] == "done" and st["beacon_count"] == 2 and st["latest_beacon_status"] == "ok"
     # error path on a second usage
     usage2 = (
-        await client.post("/api/v1/usages", headers=op, json={"template_id": hello_id})
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
     ).json()
     await client.post(
         "/api/v1/beacons", headers=_ph(proc["token"]),
@@ -85,8 +97,12 @@ async def test_beacon_auth_gates(client):
     proc = await _make_processor(client, admin)
     scoped_out = await _make_processor(client, admin, name="narrow", scopes=["other"])
     hello_id = await _hello_id(client, op)
+    moto_id = await _moto_id(client, op)
     usage = (
-        await client.post("/api/v1/usages", headers=op, json={"template_id": hello_id})
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
     ).json()
     body = {"usage_id": usage["id"], "status": "ok"}
     assert (await client.post("/api/v1/beacons", json=body)).status_code == 401
@@ -121,8 +137,19 @@ async def test_beacon_read_gates_and_usage_filter(client):
     admin, op = await _admin(client), await _operator(client)
     proc = await _make_processor(client, admin)
     hello_id = await _hello_id(client, op)
-    mine = (await client.post("/api/v1/usages", headers=op, json={"template_id": hello_id})).json()
-    theirs = (await client.post("/api/v1/usages", headers=admin, json={"template_id": hello_id})).json()
+    moto_id = await _moto_id(client, op)
+    mine = (
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
+    ).json()
+    theirs = (
+        await client.post(
+            "/api/v1/usages", headers=admin,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
+    ).json()
     b_mine = (
         await client.post(
             "/api/v1/beacons", headers=_ph(proc["token"]),

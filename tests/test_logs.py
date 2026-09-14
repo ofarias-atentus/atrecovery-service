@@ -15,6 +15,11 @@ async def _hello_id(client, headers):
     return next(t for t in tpls if t["name"] == "hello.py")["id"]
 
 
+async def _moto_id(client, headers):
+    res = (await client.get("/api/v1/resources", headers=headers)).json()
+    return next(r for r in res if r["identifier"] == "ZY323S5GHW")["id"]
+
+
 async def _operator_id(client, admin_headers):
     users = (await client.get("/api/v1/users", headers=admin_headers)).json()
     return next(u["id"] for u in users if u["username"] == "operator")
@@ -26,8 +31,12 @@ async def test_fetch_use_beacon_rows(client):
     hello_id = await _hello_id(client, op)
 
     assert (await client.get(f"/api/v1/templates/{hello_id}/fetch", headers=op)).status_code == 200
+    moto_id = await _moto_id(client, op)
     usage = (
-        await client.post("/api/v1/usages", headers=op, json={"template_id": hello_id})
+        await client.post(
+            "/api/v1/usages", headers=op,
+            json={"template_id": hello_id, "resource_id": moto_id},
+        )
     ).json()
     proc = (
         await client.post("/api/v1/processors", headers=admin, json={"name": "r1"})
@@ -46,7 +55,7 @@ async def test_fetch_use_beacon_rows(client):
     assert fetch["entity_id"] == hello_id and fetch["ip"]
     use = next(e for e in logs if e["action"] == "template.use")
     assert use["user_id"] == opid and use["entity_id"] == usage["id"]
-    assert use["meta"] == {"template_id": hello_id, "mode": "direct", "resource_id": None}
+    assert use["meta"] == {"template_id": hello_id, "mode": "direct", "resource_id": moto_id}
     beacon = next(e for e in logs if e["action"] == "beacon.received")
     assert beacon["user_id"] is None and beacon["entity_id"] == usage["id"]
     assert beacon["meta"]["processor_name"] == "r1" and beacon["meta"]["status"] == "ok"

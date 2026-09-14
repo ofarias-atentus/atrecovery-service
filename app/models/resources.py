@@ -87,6 +87,23 @@ class ResourceMetadata(Base, TimestampMixin):
     metadata_type: Mapped[MetadataType] = relationship(back_populates="entries", lazy="selectin")
 
 
+class ResourceTemplate(Base):
+    """Associates one template with one resource (resource-first execution).
+
+    A template can only be executed against a resource it is associated
+    with; a resource with no rows here runs nothing (closed world).
+    """
+
+    __tablename__ = "resource_templates"
+
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
+    )
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("templates.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
 class ResourceGroup(Base, TimestampMixin):
     __tablename__ = "resource_groups"
 
