@@ -16,6 +16,17 @@ from app.db.base import Base
 PrincipalType = str  # "user" | "role" | "group"
 
 
+def _flags(g: TemplateGrant | ResourceGrant) -> str:
+    """Short 'view+use' / 'view' / 'use' / 'none' summary for admin display."""
+    if g.can_view and g.can_use:
+        return "view+use"
+    if g.can_view:
+        return "view"
+    if g.can_use:
+        return "use"
+    return "none"
+
+
 class TemplateGrant(Base):
     """View/use rights on one template for one principal."""
 
@@ -29,6 +40,9 @@ class TemplateGrant(Base):
     principal_id: Mapped[int] = mapped_column(Integer, index=True)
     can_view: Mapped[bool] = mapped_column(Boolean, default=False)
     can_use: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    def __str__(self) -> str:
+        return f"template:{self.template_id} → {self.principal_type}:{self.principal_id} ({_flags(self)})"
 
 
 class ResourceGrant(Base):
@@ -53,3 +67,11 @@ class ResourceGrant(Base):
     principal_id: Mapped[int] = mapped_column(Integer, index=True)
     can_view: Mapped[bool] = mapped_column(Boolean, default=False)
     can_use: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    def __str__(self) -> str:
+        target = (
+            f"resource:{self.resource_id}"
+            if self.resource_id is not None
+            else f"group:{self.group_id}"
+        )
+        return f"{target} → {self.principal_type}:{self.principal_id} ({_flags(self)})"

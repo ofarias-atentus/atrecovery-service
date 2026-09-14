@@ -32,6 +32,9 @@ class ResourceType(Base, TimestampMixin, ActiveMixin):
         back_populates="resource_type", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class Resource(Base, TimestampMixin, ActiveMixin):
     __tablename__ = "resources"
@@ -54,6 +57,9 @@ class Resource(Base, TimestampMixin, ActiveMixin):
         back_populates="resource", cascade="all, delete-orphan", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return f"{self.name} ({self.identifier})"
+
 
 class MetadataType(Base, TimestampMixin, ActiveMixin):
     __tablename__ = "metadata_types"
@@ -66,6 +72,9 @@ class MetadataType(Base, TimestampMixin, ActiveMixin):
     entries: Mapped[list[ResourceMetadata]] = relationship(
         back_populates="metadata_type", lazy="selectin"
     )
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class ResourceMetadata(Base, TimestampMixin):
@@ -86,6 +95,9 @@ class ResourceMetadata(Base, TimestampMixin):
     resource: Mapped[Resource] = relationship(back_populates="metadata_entries", lazy="selectin")
     metadata_type: Mapped[MetadataType] = relationship(back_populates="entries", lazy="selectin")
 
+    def __str__(self) -> str:
+        return f"resource:{self.resource_id} :: metadata-type:{self.metadata_type_id}"
+
 
 class ResourceTemplate(Base):
     """Associates one template with one resource (resource-first execution).
@@ -103,6 +115,9 @@ class ResourceTemplate(Base):
         ForeignKey("templates.id", ondelete="CASCADE"), primary_key=True
     )
 
+    def __str__(self) -> str:
+        return f"resource:{self.resource_id} ↔ template:{self.template_id}"
+
 
 class ResourceGroup(Base, TimestampMixin):
     __tablename__ = "resource_groups"
@@ -118,6 +133,9 @@ class ResourceGroup(Base, TimestampMixin):
         back_populates="group", cascade="all, delete-orphan", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class ResourceGroupMember(Base):
     __tablename__ = "resource_group_members"
@@ -128,6 +146,9 @@ class ResourceGroupMember(Base):
     resource_id: Mapped[int] = mapped_column(
         ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
     )
+
+    def __str__(self) -> str:
+        return f"group:{self.group_id} ↔ resource:{self.resource_id}"
 
 
 class GroupAssignment(Base, TimestampMixin):
@@ -146,3 +167,6 @@ class GroupAssignment(Base, TimestampMixin):
     )
 
     group: Mapped[ResourceGroup] = relationship(back_populates="assignments")
+
+    def __str__(self) -> str:
+        return f"group:{self.group_id} → {self.principal_type}:{self.principal_id}"

@@ -26,6 +26,9 @@ class ProcessorService(Base):
     scopes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class ExecutionResult(Base):
     """Beacon: one result report from a processor for a usage."""
@@ -44,3 +47,6 @@ class ExecutionResult(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    def __str__(self) -> str:
+        return f"usage:{self.usage_id} → {self.status} (#{self.id or '?'})"

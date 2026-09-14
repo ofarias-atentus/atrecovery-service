@@ -29,3 +29,7 @@ class ActivityLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+    def __str__(self) -> str:
+        entity = f" {self.entity_type}:{self.entity_id}" if self.entity_type else ""
+        return f"{self.action}{entity} (#{self.id or '?'})"

@@ -23,6 +23,9 @@ class ExecutionMode(Base):
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     description: Mapped[str] = mapped_column(String(255), default="")
 
+    def __str__(self) -> str:
+        return self.code
+
 
 class TemplateUsage(Base):
     """One relayed use of a template against a resource (resource mandatory)."""
@@ -53,6 +56,9 @@ class TemplateUsage(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
+    def __str__(self) -> str:
+        return f"template:{self.template_id} on resource:{self.resource_id} (#{self.id or '?'})"
+
 
 class UsageLimit(Base):
     """Max uses of one template per scope × window. One template → many limits."""
@@ -67,4 +73,8 @@ class UsageLimit(Base):
     scope_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_uses: Mapped[int] = mapped_column(Integer)
     window: Mapped[str] = mapped_column(String(10))  # total|daily|monthly
+
+    def __str__(self) -> str:
+        scope = self.scope_type if self.scope_id is None else f"{self.scope_type}:{self.scope_id}"
+        return f"template:{self.template_id} {scope}/{self.window} ≤{self.max_uses}"
     is_active: Mapped[bool] = mapped_column(default=True)

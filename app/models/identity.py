@@ -25,6 +25,9 @@ class Role(Base, TimestampMixin, ActiveMixin):
         secondary="user_roles", back_populates="roles", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class Permission(Base, TimestampMixin):
     __tablename__ = "permissions"
@@ -37,6 +40,9 @@ class Permission(Base, TimestampMixin):
         secondary="role_permissions", back_populates="permissions", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.code
+
 
 class RolePermission(Base):
     __tablename__ = "role_permissions"
@@ -45,6 +51,9 @@ class RolePermission(Base):
     permission_id: Mapped[int] = mapped_column(
         ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
     )
+
+    def __str__(self) -> str:
+        return f"role:{self.role_id} → permission:{self.permission_id}"
 
 
 class User(Base, TimestampMixin, ActiveMixin):
@@ -63,12 +72,18 @@ class User(Base, TimestampMixin, ActiveMixin):
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.username
+
 
 class UserRole(Base):
     __tablename__ = "user_roles"
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True)
+
+    def __str__(self) -> str:
+        return f"user:{self.user_id} ↔ role:{self.role_id}"
 
 
 class AuthIdentity(Base, TimestampMixin):
@@ -87,3 +102,6 @@ class AuthIdentity(Base, TimestampMixin):
     extra: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="identities")
+
+    def __str__(self) -> str:
+        return f"{self.provider}:{self.provider_sub}"

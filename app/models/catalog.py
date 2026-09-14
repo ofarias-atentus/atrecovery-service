@@ -27,6 +27,9 @@ class TemplateCategory(Base, TimestampMixin, ActiveMixin):
         back_populates="category", cascade="all, delete-orphan", lazy="selectin"
     )
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class Template(Base, TimestampMixin, ActiveMixin):
     __tablename__ = "templates"
@@ -44,3 +47,6 @@ class Template(Base, TimestampMixin, ActiveMixin):
     )
 
     category: Mapped[TemplateCategory] = relationship(back_populates="templates", lazy="selectin")
+
+    def __str__(self) -> str:
+        return f"{self.name} v{self.version}"
