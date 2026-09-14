@@ -119,9 +119,45 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/resources/$RES/metadata \
   -d '{"metadata_type":"monitor","data":{"monitor":"m1"}}'
 ```
 
-## 5. Relay a usage (voucher mode) and report a beacon
+## 5. Relay usages — direct, scheduler, voucher
 
-This is the "execution is out-of-scope" loop: you ask, an external service answers.
+This is the "execution is out-of-scope" loop: you record a request, an external
+service later reports the result. Three modes exist (`GET /api/v1/execution-modes`
+lists them); all three need `template:use` plus a use-grant on the template.
+
+### 5a. Direct — fire and record (status is `dispatched` right away)
+
+`mode` defaults to `direct`, so the smallest possible usage is just a template id:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL}" | python3 -m json.tool
+# → {"mode":"direct","status":"dispatched","external_dispatch_id":null,...}
+```
+
+### 5b. Scheduler — store a future run (nothing dispatches it automatically)
+
+Scheduler mode **requires** `schedule_at` and optionally stores a `payload`.
+The PoC only records the row — a real scheduler worker would pick it up later
+(see `imprv.md`).
+
+```bash
+# Missing schedule_at → 422. Try it to see the guard:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"mode\":\"scheduler\"}" | python3 -m json.tool
+# → {"detail":"scheduler mode requires schedule_at"}
+
+# With a date + payload → status stays "pending" until something external acts:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"mode\":\"scheduler\",\"schedule_at\":\"2030-01-01T00:00:00\",\"payload\":{\"name\":\"ops\"}}" \
+  | python3 -m json.tool
+# → {"mode":"scheduler","status":"pending","schedule_at":"2030-01-01T00:00:00","payload":{"name":"ops"},...}
+```
+
+### 5c. Voucher — get a dispatch id, then report a beacon
 
 ```bash
 # 1) Operator requests hello.py in voucher mode → you get an external dispatch id V-…
@@ -131,7 +167,6 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 # Read "id" and "external_dispatch_id" (starts with V-) from the output, then:
 USAGE=<paste-usage-id>
 
-```bash
 # 2) The external processor reports the result. NOTE: no JWT here — token header instead.
 #    For a seeded dev DB the lab-runner token was printed by the seed; for the demo token use:
 curl -s -X POST http://127.0.0.1:8000/api/v1/beacons \
@@ -147,6 +182,37 @@ curl -s http://127.0.0.1:8000/api/v1/usages/$USAGE/status \
 curl -s "http://127.0.0.1:8000/api/v1/beacons?usage_id=$USAGE" \
   -H "Authorization: Bearer $OP" | python3 -m json.tool
 ```
+
+### 5d. Target a resource (needs a use-grant on it too)
+
+Pass `resource_id` to aim a usage at a device. The operator holds a use-grant on the
+`lab-phones` group, so the seed phone works; an ungranted resource gives 403:
+
+```bash
+# Works — Moto G6 3 is in the granted lab-phones group:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES,\"mode\":\"direct\"}" | python3 -m json.tool
+
+# 403 — secret.py from step 3 was never granted to the operator:
+curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$SECRET}" | python3 -m json.tool
+```
+
+### 5e. List usages and watch the limits
+
+```bash
+# Operators see only their own usages; admins see everyone's (try both tokens):
+curl -s http://127.0.0.1:8000/api/v1/usages -H "Authorization: Bearer $OP" | python3 -m json.tool
+curl -s "http://127.0.0.1:8000/api/v1/usages?template_id=$TPL" \
+  -H "Authorization: Bearer $ADMIN" | python3 -m json.tool
+```
+
+Two guards to know about: an unknown `mode` is rejected with 422, and exhausted
+usage limits answer **429**. The seed puts a 10/day global limit on `hello.py`
+(`GET /api/v1/usage-limits` as admin to inspect) — hammer the fetch endpoint in a
+loop and you'll see fetch flip to 429 too, since fetches check limits as well.
 
 ## 6. Read a statistic (grant-gated, per user/role)
 
