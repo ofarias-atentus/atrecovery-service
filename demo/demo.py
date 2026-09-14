@@ -44,7 +44,9 @@ def main() -> int:
     check("operator lists granted templates", True, f"sees hello.py id={hello['id']}")
 
     fetch = client.get(f"/api/v1/templates/{hello['id']}/fetch", headers=operator)
-    check("operator fetch hello.py", fetch.status_code == 200, fetch.json().get("content", "").strip())
+    _content = fetch.json().get("content", "")
+    _detail = _content["source"].strip() if isinstance(_content, dict) else str(_content).strip()
+    check("operator fetch hello.py", fetch.status_code == 200, _detail)
 
     usage = client.post(
         "/api/v1/usages", headers=operator,
@@ -72,7 +74,8 @@ def main() -> int:
 
     secret = client.post(
         "/api/v1/templates", headers=admin,
-        json={"name": f"demo-secret-{os.getpid()}.py", "category_id": 1, "content": "x"},
+        json={"name": f"demo-secret-{os.getpid()}.py", "category_id": 1,
+              "content": {"source": "x"}},
     ).json()
     denied = client.get(f"/api/v1/templates/{secret['id']}/fetch", headers=operator)
     check("ungranted fetch denied", denied.status_code == 403, f"got {denied.status_code}")

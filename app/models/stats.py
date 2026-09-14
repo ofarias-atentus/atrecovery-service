@@ -1,9 +1,9 @@
-"""Statistics definitions model (Stage 7).
+"""Statistics definitions + per-principal grants.
 
-`internal` defs name a registered resolver in ``query_config.resolver``
-(aggregation over usages/logs/beacons, no code change to add rows).
-`external` defs carry ``query_config={url, method, headers, mapping}`` and
-are fetched server-side with ``httpx``. Readers need the linked permission.
+Access is NOT permission-code based anymore: each definition is visible
+only to explicitly granted principals (``user`` | ``role``), so different
+users/roles can see different statistics. Superusers (or ``admin:manage``
+holders for administration) bypass the grant check.
 """
 from __future__ import annotations
 
@@ -21,7 +21,18 @@ class StatisticDefinition(Base):
     source_type: Mapped[str] = mapped_column(String(10))  # internal|external
     query_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     required_params: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    required_permission_code: Mapped[str] = mapped_column(
-        ForeignKey("permissions.code", ondelete="RESTRICT"), index=True
-    )
     is_active: Mapped[bool] = mapped_column(default=True)
+
+
+class StatisticGrant(Base):
+    """Grant statistic visibility to a user or role principal."""
+
+    __tablename__ = "statistic_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    statistic_id: Mapped[int] = mapped_column(
+        ForeignKey("statistics_definitions.id", ondelete="CASCADE"), index=True
+    )
+    principal_type: Mapped[str] = mapped_column(String(10), index=True)  # user | role
+    principal_id: Mapped[int] = mapped_column(Integer, index=True)
+    can_view: Mapped[bool] = mapped_column(default=True)

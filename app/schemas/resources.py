@@ -1,24 +1,56 @@
-"""Resource / metadata / group schemas (Pydantic v2)."""
+"""Resource / type / group schemas (Pydantic v2).
+
+Resources are ``id / name / identifier / type + data JSON`` — all device
+details live inside ``data`` (e.g. mobile device
+``{"udid": ..., "nombre": ..., "plataforma": "android", ...}``) and are
+validated against the owning ``ResourceType.schema`` when present.
+"""
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ResourceTypeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64, examples=["mobile_device"])
+    description: str | None = None
+    schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool = True
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ResourceTypeUpdate(BaseModel):
+    description: str | None = None
+    schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ResourceTypeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    name: str
+    description: str | None = None
+    schema: dict[str, Any] | None = Field(default=None, alias="schema")
+    is_active: bool
+
+
 class ResourceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128, examples=["Moto G6 3"])
     identifier: str = Field(min_length=1, max_length=128, examples=["ZY323S5GHW"])
-    platform: str | None = Field(default=None, examples=["android"])
-    platform_version: str | None = Field(default=None, examples=["8.0.0"])
-    description: str | None = Field(default=None, examples=["random device"])
-    extra: dict[str, Any] | None = None
+    resource_type_id: int | None = None
+    data: dict[str, Any] | None = Field(
+        default=None,
+        examples=[{"udid": "ZY323S5GHW", "nombre": "Moto G6 3", "plataforma": "android"}],
+    )
 
 
 class ResourceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
-    platform: str | None = None
-    platform_version: str | None = None
-    description: str | None = None
-    extra: dict[str, Any] | None = None
+    resource_type_id: int | None = None
+    data: dict[str, Any] | None = None
     is_active: bool | None = None
 
 
@@ -28,33 +60,11 @@ class ResourceRead(BaseModel):
     id: int
     name: str
     identifier: str
-    platform: str | None = None
-    platform_version: str | None = None
-    description: str | None = None
-    extra: dict[str, Any] | None = None
+    resource_type_id: int | None = None
+    resource_type_name: str | None = None
+    data: dict[str, Any] | None = None
     is_active: bool
-    metadata: dict[str, Any] = {}
     groups: list[str] = []
-
-
-class MetadataDefCreate(BaseModel):
-    key: str = Field(min_length=1, max_length=64, examples=["hostname"])
-    value_type: Literal["str", "int", "float", "bool", "json"] = "str"
-    description: str | None = None
-
-
-class MetadataDefRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    key: str
-    value_type: str
-    description: str | None = None
-
-
-class MetadataSet(BaseModel):
-    key: str = Field(min_length=1, max_length=64)
-    value: Any
 
 
 class GroupCreate(BaseModel):

@@ -1,11 +1,15 @@
 """Catalog models: template categories + templates.
 
 Terminology rule: `template` everywhere, never `script`.
-Stage 3 will add object-level grants over these rows.
+Templates are stored as JSON data (``content`` JSON column) and structure
+is validated against ``input_schema`` (per template) or, as a fallback,
+the category ``schema_hint`` — same mechanism as resource data validation.
 """
 from __future__ import annotations
 
-from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint
+from typing import Any
+
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import ActiveMixin, Base, TimestampMixin
@@ -34,7 +38,7 @@ class Template(Base, TimestampMixin, ActiveMixin):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("template_categories.id", ondelete="RESTRICT"), index=True
     )
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[Any] = mapped_column(JSON, nullable=False)
     input_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

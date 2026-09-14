@@ -24,10 +24,10 @@ from app.schemas.resources import (  # noqa: F401
     GroupCreate,
     GroupRead,
     MemberAdd,
-    MetadataDefCreate,
-    MetadataDefRead,
-    MetadataSet,
     ResourceCreate,
     ResourceRead,
+    ResourceTypeCreate,
+    ResourceTypeRead,
+    ResourceTypeUpdate,
     ResourceUpdate,
 )

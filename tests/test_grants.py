@@ -26,7 +26,9 @@ async def test_seed_grants_operator_hello_and_moto(client):
     hello = next(t for t in templates if t["name"] == "hello.py")
     assert (await client.get(f"/api/v1/templates/{hello['id']}", headers=op)).status_code == 200
     fetch = await client.get(f"/api/v1/templates/{hello['id']}/fetch", headers=op)
-    assert fetch.status_code == 200 and "hello from template" in fetch.json()["content"]
+    content = fetch.json()["content"]
+    source = content["source"] if isinstance(content, dict) else content
+    assert fetch.status_code == 200 and "hello from template" in source
     resources = (await client.get("/api/v1/resources", headers=op)).json()
     moto = next(r for r in resources if r["identifier"] == "ZY323S5GHW")
     assert (await client.get(f"/api/v1/resources/{moto['id']}", headers=op)).status_code == 200
@@ -83,7 +85,6 @@ async def test_ungranted_resource_denied_then_direct_grant_allows(client):
     ).json()
     assert all(x["id"] != r["id"] for x in (await client.get("/api/v1/resources", headers=op)).json())
     assert (await client.get(f"/api/v1/resources/{r['id']}", headers=op)).status_code == 403
-    assert (await client.get(f"/api/v1/resources/{r['id']}/metadata", headers=op)).status_code == 403
     operator_id, _ = await _ids(client, admin)
     await client.post(
         "/api/v1/grants/resources",

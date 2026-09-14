@@ -32,12 +32,12 @@ class TemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128, examples=["hello.py"])
     version: int = Field(default=1, ge=1)
     category_id: int
-    content: str = Field(min_length=1, examples=["print('hello')"])
+    content: Any = Field(examples=[{"language": "python", "source": "print('hello')"}])
     input_schema: dict[str, Any] | None = None
 
 
 class TemplateUpdate(BaseModel):
-    content: str | None = Field(default=None, min_length=1)
+    content: Any | None = Field(default=None)
     input_schema: dict[str, Any] | None = None
     is_active: bool | None = None
 
@@ -50,7 +50,7 @@ class TemplateRead(BaseModel):
     version: int
     category_id: int
     category_name: str = ""
-    content: str
+    content: Any
     input_schema: dict[str, Any] | None = None
     is_active: bool
     created_by: int | None = None
@@ -66,5 +66,5 @@ class TemplateFetch(BaseModel):
     id: int
     name: str
     version: int
-    content: str
+    content: Any
     input_schema: dict[str, Any] | None = None

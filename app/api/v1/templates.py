@@ -1,5 +1,7 @@
 """Templates router (retrieve/maintain/categorize; execution is out-of-scope).
 
+Templates store JSON ``content`` validated against ``input_schema`` or the
+category ``schema_hint`` (same mechanism as resource data validation).
 Read: template:view code + object grant (direct/role/group). Fetch:
 template:use code + use grant. Write: template:manage.
 DELETE is a soft deactivate (is_active=False) to preserve usage history.
@@ -16,6 +18,7 @@ from app.schemas.catalog import TemplateCreate, TemplateFetch, TemplateRead, Tem
 from app.services.activity import TEMPLATE_FETCH, client_ip, log_activity
 from app.services.rbac import granted_template_ids, require_template_access
 from app.services.usage_svc import LimitExceeded, check_limits
+from app.services.validation import effective_template_schema, validate_json_data
 
 router = APIRouter()
 VIEW = require_permission("template:view")
@@ -104,6 +107,11 @@ async def create_template(
     )
     if dup.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="template name+version already exists")
+    validate_json_data(
+        body.content,
+        effective_template_schema(body.input_schema, cat.schema_hint),
+        label="content",
+    )
     t = Template(
         name=body.name,
         version=body.version,
@@ -129,6 +137,19 @@ async def update_template(
     t = result.scalar_one_or_none()
     if t is None:
         raise HTTPException(status_code=404, detail="template not found")
+    new_content = body.content if body.content is not None else t.content
+    new_schema = body.input_schema if body.input_schema is not None else t.input_schema
+    if body.content is not None or body.input_schema is not None:
+        cat = (
+            await db.execute(
+                select(TemplateCategory).where(TemplateCategory.id == t.category_id)
+            )
+        ).scalar_one_or_none()
+        validate_json_data(
+            new_content,
+            effective_template_schema(new_schema, cat.schema_hint if cat else None),
+            label="content",
+        )
     if body.content is not None:
         t.content = body.content
     if body.input_schema is not None:

@@ -16,11 +16,10 @@ from app.models.identity import (  # noqa: F401
 )
 from app.models.resources import (  # noqa: F401
     GroupAssignment,
-    MetadataDefinition,
     Resource,
     ResourceGroup,
     ResourceGroupMember,
-    ResourceMetadata,
+    ResourceType,
 )
-from app.models.stats import StatisticDefinition  # noqa: F401
+from app.models.stats import StatisticDefinition, StatisticGrant  # noqa: F401
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit  # noqa: F401

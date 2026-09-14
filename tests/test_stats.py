@@ -115,11 +115,18 @@ async def test_external_stat_defined_without_code_change(client, monkeypatch):
             json={"name": "fleet_health", "source_type": "external",
                   "query_config": {"url": "https://fleet.example/health",
                                    "mapping": {"rate": "outer.rate"}},
-                  "required_params": ["region"],
-                  "required_permission_code": "stats:view"},
+                  "required_params": ["region"]},
         )
     ).json()
     assert created["name"] == "fleet_health"
+    # grant operator-role access explicitly (per-user/role model, no permission codes)
+    roles = (await client.get("/api/v1/roles", headers=admin)).json()
+    operator_role = next(r["id"] for r in roles if r["name"] == "operator")
+    await client.post(
+        "/api/v1/stats/grants", headers=admin,
+        json={"statistic_id": created["id"], "principal_type": "role",
+              "principal_id": operator_role},
+    )
     value = (
         await client.get("/api/v1/stats/fleet_health?region=eu", headers=op)
     ).json()
@@ -142,20 +149,74 @@ async def test_external_fetch_failure_is_502(client, monkeypatch):
     ).status_code == 502
 
 
-async def test_stat_gates_and_definition_guards(client):
+async def test_stat_grants_per_user_and_role(client):
+    """Grants (not permission codes) gate stats; access can differ per user."""
     admin, op = await _admin(client), await _operator(client)
-    # user without stats:view
     await client.post(
         "/api/v1/users", headers=admin,
         json={"username": "nostats", "email": "n@example.com", "password": "x12345678"},
     )
     no_token = (await login(client, "nostats", "x12345678"))["access_token"]
     no_headers = auth_headers(no_token)
+    # nostats has no grant -> 403; operator has role grant from seed -> 200
     assert (
         await client.get("/api/v1/stats/most_used_template", headers=no_headers)
     ).status_code == 403
+    assert (await client.get("/api/v1/stats/most_used_template", headers=op)).status_code == 200
     assert (await client.get("/api/v1/stats/most_used_template")).status_code == 401
     assert (await client.get("/api/v1/stats/nope", headers=op)).status_code == 404
+    # per-user grant: give nostats access to exactly one stat
+    users = (await client.get("/api/v1/users", headers=admin)).json()
+    nostats_id = next(u["id"] for u in users if u["username"] == "nostats")
+    defs = (await client.get("/api/v1/stats/definitions", headers=admin)).json()
+    most = next(d for d in defs if d["name"] == "most_used_template")
+    g = (
+        await client.post(
+            "/api/v1/stats/grants", headers=admin,
+            json={"statistic_id": most["id"], "principal_type": "user",
+                  "principal_id": nostats_id},
+        )
+    )
+    assert g.status_code == 201
+    assert (await client.get("/api/v1/stats/most_used_template", headers=no_headers)).status_code == 200
+    # still no access to other stats
+    assert (
+        await client.get("/api/v1/stats/beacon_success_rate", headers=no_headers)
+    ).status_code == 403
+    # duplicate grant -> 409; unknown principal -> 404; operator cannot manage
+    assert (
+        await client.post(
+            "/api/v1/stats/grants", headers=admin,
+            json={"statistic_id": most["id"], "principal_type": "user",
+                  "principal_id": nostats_id},
+        )
+    ).status_code == 409
+    assert (
+        await client.post(
+            "/api/v1/stats/grants", headers=admin,
+            json={"statistic_id": most["id"], "principal_type": "user",
+                  "principal_id": 9999},
+        )
+    ).status_code == 404
+    assert (
+        await client.post(
+            "/api/v1/stats/grants", headers=op,
+            json={"statistic_id": most["id"], "principal_type": "user",
+                  "principal_id": nostats_id},
+        )
+    ).status_code == 403
+    assert (await client.get("/api/v1/stats/grants", headers=op)).status_code == 403
+    grants = (await client.get("/api/v1/stats/grants", headers=admin)).json()
+    assert any(x["statistic_id"] == most["id"] for x in grants)
+    gid = next(x["id"] for x in grants if x["statistic_id"] == most["id"] and x["principal_id"] == nostats_id)
+    assert (await client.delete(f"/api/v1/stats/grants/{gid}", headers=admin)).status_code == 204
+    assert (
+        await client.get("/api/v1/stats/most_used_template", headers=no_headers)
+    ).status_code == 403
+
+
+async def test_stat_gates_and_definition_guards(client):
+    admin, op = await _admin(client), await _operator(client)
     # definitions are admin-only and validated
     assert (
         await client.post(
@@ -168,12 +229,6 @@ async def test_stat_gates_and_definition_guards(client):
             "/api/v1/stats/definitions", headers=admin, json={"name": "most_used_template"}
         )
     ).status_code == 409
-    assert (
-        await client.post(
-            "/api/v1/stats/definitions", headers=admin,
-            json={"name": "bad", "required_permission_code": "nope"},
-        )
-    ).status_code == 404
     assert (await client.delete("/api/v1/stats/definitions/nope", headers=admin)).status_code == 404
     defs = (await client.get("/api/v1/stats/definitions", headers=admin)).json()
     assert {"most_used_template", "last_fetch_by_user", "beacon_success_rate"} <= {

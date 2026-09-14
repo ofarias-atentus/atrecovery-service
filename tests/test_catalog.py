@@ -1,4 +1,4 @@
-"""Stage 2 tests: catalog seed, CRUD, metadata attach/detach, groups, permission gates."""
+"""Catalog + typed JSON resources tests: seed, CRUD, validation, groups, gates."""
 from tests.conftest import auth_headers, login
 
 
@@ -15,13 +15,19 @@ async def test_seed_catalog_present(client):
     cats = {c["name"] for c in (await client.get("/api/v1/categories", headers=h)).json()}
     assert {"python", "json"} <= cats
     templates = (await client.get("/api/v1/templates", headers=h)).json()
-    assert any(t["name"] == "hello.py" and t["category_name"] == "python" for t in templates)
+    hello = next(t for t in templates if t["name"] == "hello.py")
+    assert hello["category_name"] == "python"
+    assert isinstance(hello["content"], dict) and "hello from template" in hello["content"]["source"]
+    types = {t["name"] for t in (await client.get("/api/v1/resource-types", headers=h)).json()}
+    assert "mobile_device" in types
     resources = (await client.get("/api/v1/resources", headers=h)).json()
     moto = next(r for r in resources if r["identifier"] == "ZY323S5GHW")
-    assert moto["name"] == "Moto G6 3" and moto["platform"] == "android"
-    assert moto["metadata"]["hostname"] == "moto-g6-3.lab"
-    assert set(moto["metadata"]) >= {
-        "monitor", "nodo", "nombre", "descripcion", "hostname", "host", "servidor_log",
+    assert moto["name"] == "Moto G6 3" and moto["resource_type_name"] == "mobile_device"
+    assert moto["data"]["plataforma"] == "android"
+    assert moto["data"]["hostname"] == "moto-g6-3.lab"
+    assert set(moto["data"]) >= {
+        "udid", "nombre", "plataforma", "version_plataforma", "descripcion",
+        "monitor", "nodo", "hostname", "host", "servidor_log",
     }
     groups = (await client.get("/api/v1/resource-groups", headers=h)).json()
     lab = next(g for g in groups if g["name"] == "lab-phones")
@@ -34,13 +40,16 @@ async def test_operator_can_read_but_not_write(client):
     assert (await client.get("/api/v1/categories", headers=h)).status_code == 200
     assert (await client.get("/api/v1/templates", headers=h)).status_code == 200
     assert (await client.get("/api/v1/resources", headers=h)).status_code == 200
-    assert (await client.get("/api/v1/metadata-definitions", headers=h)).status_code == 200
+    assert (await client.get("/api/v1/resource-types", headers=h)).status_code == 200
     assert (await client.post("/api/v1/categories", headers=h, json={"name": "x"})).status_code == 403
     assert (
         await client.post("/api/v1/templates", headers=h, json={"name": "x", "category_id": 1, "content": "x"})
     ).status_code == 403
     assert (
         await client.post("/api/v1/resources", headers=h, json={"name": "x", "identifier": "x"})
+    ).status_code == 403
+    assert (
+        await client.post("/api/v1/resource-types", headers=h, json={"name": "x"})
     ).status_code == 403
     assert (
         await client.post("/api/v1/resource-groups", headers=h, json={"name": "x"})
@@ -53,7 +62,7 @@ async def test_unauthenticated_denied(client):
         assert (await client.get(path)).status_code == 401
 
 
-async def test_category_template_crud_and_uniqueness(client):
+async def test_category_template_crud_and_json_validation(client):
     h = await _admin(client)
     cat = (await client.post("/api/v1/categories", headers=h, json={"name": "yaml"})).json()
     assert (await client.post("/api/v1/categories", headers=h, json={"name": "yaml"})).status_code == 409
@@ -61,14 +70,15 @@ async def test_category_template_crud_and_uniqueness(client):
         await client.post(
             "/api/v1/templates",
             headers=h,
-            json={"name": "deploy.yaml", "category_id": cat["id"], "content": "steps: []"},
+            json={"name": "deploy.yaml", "category_id": cat["id"], "content": {"steps": []}},
         )
     ).json()
     assert tpl["category_name"] == "yaml"
+    assert tpl["content"] == {"steps": []}
     dup = await client.post(
         "/api/v1/templates",
         headers=h,
-        json={"name": "deploy.yaml", "category_id": cat["id"], "content": "other"},
+        json={"name": "deploy.yaml", "category_id": cat["id"], "content": {"steps": ["other"]}},
     )
     assert dup.status_code == 409
     # same name, new version is allowed
@@ -76,14 +86,31 @@ async def test_category_template_crud_and_uniqueness(client):
         await client.post(
             "/api/v1/templates",
             headers=h,
-            json={"name": "deploy.yaml", "version": 2, "category_id": cat["id"], "content": "v2"},
+            json={"name": "deploy.yaml", "version": 2, "category_id": cat["id"], "content": {"steps": ["v2"]}},
         )
     )
     assert v2.status_code == 201
-    upd = (
-        await client.patch(f"/api/v1/templates/{tpl['id']}", headers=h, json={"content": "steps: [a]"})
+    # input_schema validation enforced the same way as resource type schemas
+    bad_cat = (
+        await client.post(
+            "/api/v1/categories", headers=h,
+            json={"name": "strict", "schema_hint": {"type": "object", "required": ["source"]}},
+        )
     ).json()
-    assert upd["content"] == "steps: [a]"
+    bad = await client.post(
+        "/api/v1/templates", headers=h,
+        json={"name": "bad.py", "category_id": bad_cat["id"], "content": {"nope": 1}},
+    )
+    assert bad.status_code == 422
+    good = await client.post(
+        "/api/v1/templates", headers=h,
+        json={"name": "good.py", "category_id": bad_cat["id"], "content": {"source": "x"}},
+    )
+    assert good.status_code == 201
+    upd = (
+        await client.patch(f"/api/v1/templates/{tpl['id']}", headers=h, json={"content": {"steps": ["a"]}})
+    ).json()
+    assert upd["content"] == {"steps": ["a"]}
     # soft delete: hidden from default list, visible with include_inactive
     assert (await client.delete(f"/api/v1/templates/{tpl['id']}", headers=h)).status_code == 204
     ids = [t["id"] for t in (await client.get("/api/v1/templates", headers=h)).json()]
@@ -94,45 +121,51 @@ async def test_category_template_crud_and_uniqueness(client):
     assert tpl["id"] in all_ids
 
 
-async def test_resource_metadata_attach_detach(client):
-    h = await _admin(client)
-    r = (
-        await client.post(
-            "/api/v1/resources", headers=h, json={"name": "Pixel", "identifier": "PIXEL01"}
-        )
-    ).json()
-    assert r["metadata"] == {}
-    put = await client.put(
-        f"/api/v1/resources/{r['id']}/metadata", headers=h, json={"key": "hostname", "value": "pixel.lab"}
-    )
-    assert put.status_code == 200
-    got = (await client.get(f"/api/v1/resources/{r['id']}", headers=h)).json()
-    assert got["metadata"]["hostname"] == "pixel.lab"
-    # unknown definition key -> 404
-    bad = await client.put(
-        f"/api/v1/resources/{r['id']}/metadata", headers=h, json={"key": "nope", "value": 1}
-    )
-    assert bad.status_code == 404
-    assert (await client.delete(f"/api/v1/resources/{r['id']}/metadata/hostname", headers=h)).status_code == 204
-    got2 = (await client.get(f"/api/v1/resources/{r['id']}", headers=h)).json()
-    assert "hostname" not in got2["metadata"]
-    assert (
-        await client.delete(f"/api/v1/resources/{r['id']}/metadata/hostname", headers=h)
-    ).status_code == 404
-
-
-async def test_metadata_definitions_crud(client):
+async def test_resource_types_and_data_json(client):
     h = await _admin(client)
     op = await _operator(client)
-    keys = [d["key"] for d in (await client.get("/api/v1/metadata-definitions", headers=op)).json()]
-    assert "hostname" in keys
-    d = (
-        await client.post("/api/v1/metadata-definitions", headers=h, json={"key": "rack", "value_type": "str"})
+    types = (await client.get("/api/v1/resource-types", headers=op)).json()
+    mobile = next(t for t in types if t["name"] == "mobile_device")
+    assert mobile["schema"]["required"] == ["udid", "nombre", "plataforma"]
+    # invalid data rejected by type schema
+    bad = await client.post(
+        "/api/v1/resources", headers=h,
+        json={"name": "Bad", "identifier": "BAD01",
+              "resource_type_id": mobile["id"], "data": {"nombre": "x"}},
+    )
+    assert bad.status_code == 422
+    r = (
+        await client.post(
+            "/api/v1/resources", headers=h,
+            json={"name": "Pixel", "identifier": "PIXEL01",
+                  "resource_type_id": mobile["id"],
+                  "data": {"udid": "PIXEL01", "nombre": "Pixel", "plataforma": "android"}},
+        )
     ).json()
-    assert d["key"] == "rack"
-    assert (await client.post("/api/v1/metadata-definitions", headers=h, json={"key": "rack"})).status_code == 409
-    assert (await client.post("/api/v1/metadata-definitions", headers=op, json={"key": "z"})).status_code == 403
-    assert (await client.delete("/api/v1/metadata-definitions/rack", headers=h)).status_code == 204
+    assert r["data"]["plataforma"] == "android"
+    assert r["resource_type_name"] == "mobile_device"
+    got = (await client.get(f"/api/v1/resources/{r['id']}", headers=h)).json()
+    assert got["data"]["udid"] == "PIXEL01"
+    upd = (
+        await client.patch(f"/api/v1/resources/{r['id']}", headers=h,
+                           json={"data": {"udid": "PIXEL01", "nombre": "Pixel 2", "plataforma": "android"}})
+    ).json()
+    assert upd["data"]["nombre"] == "Pixel 2"
+    # unknown type -> 404; duplicate identifier -> 409; operator write -> 403
+    assert (
+        await client.post("/api/v1/resources", headers=h, json={"name": "z", "identifier": "Z2", "resource_type_id": 9999})
+    ).status_code == 404
+    assert (
+        await client.post("/api/v1/resources", headers=h, json={"name": "dup", "identifier": "PIXEL01"})
+    ).status_code == 409
+    assert (
+        await client.post("/api/v1/resource-types", headers=op, json={"name": "z"})
+    ).status_code == 403
+    # type CRUD
+    t = (await client.post("/api/v1/resource-types", headers=h, json={"name": "sensor"})).json()
+    assert t["name"] == "sensor"
+    assert (await client.post("/api/v1/resource-types", headers=h, json={"name": "sensor"})).status_code == 409
+    assert (await client.delete(f"/api/v1/resource-types/{t['id']}", headers=h)).status_code == 204
 
 
 async def test_groups_members_assignments(client):

@@ -1,19 +1,20 @@
-"""Idempotent dev/demo seed (Stages 1-3).
+"""Idempotent dev/demo seed.
 
-Stage 1: permissions, roles (admin/operator), users (admin/admin123,
-operator/operator123) with local auth identities.
-Stage 2: template categories (python/json), hello.py template, Moto G6
-resource + metadata, lab-phones group assigned to the operator role.
-Stage 3: object grants — operator role can view/use hello.py and the
-lab-phones group (hence its member Moto G6).
-Stage 4: execution modes (direct/scheduler/voucher) + demo limit
-(hello.py, global, 10/day).
-Stage 5: processor service lab-runner (token from SEED_PROCESSOR_TOKEN env
-or generated once and printed; only its sha256 is stored).
-Stage 7: statistics definitions (most_used_template, last_fetch_by_user,
-beacon_success_rate — all internal, gated on stats:view).
+- Identity: permissions (no stats permission codes), roles admin/operator,
+  users admin/admin123, operator/operator123 with local auth identities.
+- Templates: categories python/json; hello.py stored as JSON content with
+  input_schema validation.
+- Resources: types (mobile_device) + Moto G6 resource with data JSON,
+  lab-phones group assigned to the operator role.
+- Grants: operator role can view/use hello.py + lab-phones group.
+- Usage: modes direct/scheduler/voucher + demo limit (hello.py, 10/day).
+- Processors: lab-runner token.
+- Stats: definitions + per-principal StatisticGrant rows (operator role can
+  view all three; different users/roles can be granted differently).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
+NOTE: schema changed (JSON content/data, resource types, stat grants) —
+delete any pre-existing ``data/app.db`` before reseeding.
 """
 from __future__ import annotations
 
@@ -33,13 +34,12 @@ from app.models.grants import ResourceGrant, TemplateGrant
 from app.models.identity import AuthIdentity, Permission, Role, RolePermission, User, UserRole
 from app.models.resources import (
     GroupAssignment,
-    MetadataDefinition,
     Resource,
     ResourceGroup,
     ResourceGroupMember,
-    ResourceMetadata,
+    ResourceType,
 )
-from app.models.stats import StatisticDefinition
+from app.models.stats import StatisticDefinition, StatisticGrant
 from app.models.usage import ExecutionMode, UsageLimit
 
 PERMISSION_DEFS: list[tuple[str, str]] = [
@@ -50,14 +50,13 @@ PERMISSION_DEFS: list[tuple[str, str]] = [
     ("template:manage", "Create/update/delete templates and categories"),
     ("resource:view", "List and read resources"),
     ("resource:use", "Use resources in template usages"),
-    ("resource:manage", "Create/update/delete resources, metadata, groups"),
-    ("stats:view", "Read statistics values"),
+    ("resource:manage", "Create/update/delete resources, types, groups"),
     ("processors:manage", "Manage processor service tokens"),
 ]
 
 ROLE_DEFS: dict[str, list[str]] = {
     "admin": [code for code, _ in PERMISSION_DEFS],
-    "operator": ["template:view", "template:use", "resource:view", "resource:use", "stats:view"],
+    "operator": ["template:view", "template:use", "resource:view", "resource:use"],
 }
 
 USER_DEFS: list[dict] = [
@@ -89,7 +88,7 @@ async def _get_or_create_role(db: AsyncSession, name: str, description: str) -> 
 
 
 async def seed_all(db: AsyncSession) -> dict[str, int]:
-    # Permissions
+    # Permissions (drop legacy stats:view if present from an old DB)
     perms: dict[str, Permission] = {}
     for code, desc in PERMISSION_DEFS:
         result = await db.execute(select(Permission).where(Permission.code == code))
@@ -99,6 +98,12 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
             db.add(perm)
             await db.flush()
         perms[code] = perm
+    legacy = (
+        await db.execute(select(Permission).where(Permission.code == "stats:view"))
+    ).scalar_one_or_none()
+    if legacy is not None:
+        await db.delete(legacy)
+        await db.flush()
 
     # Roles + role_permissions
     for role_name, codes in ROLE_DEFS.items():
@@ -158,6 +163,7 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "roles": len(ROLE_DEFS),
         "users": len(USER_DEFS),
         "categories": len(CATEGORY_DEFS),
+        "resource_types": len(RESOURCE_TYPE_DEFS),
         "grants": 2,
         "modes": len(MODE_DEFS),
         "limits": 1,
@@ -170,18 +176,8 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
 
 
 CATEGORY_DEFS: list[tuple[str, str]] = [
-    ("python", "Python templates (executable code relayed to processor services)"),
+    ("python", "Python templates (JSON content relayed to processor services)"),
     ("json", "JSON templates (structured payloads relayed to processor services)"),
-]
-
-METADATA_DEFS: list[tuple[str, str, str]] = [
-    ("monitor", "str", "Monitor identifier"),
-    ("nodo", "str", "Node identifier"),
-    ("nombre", "str", "Display name"),
-    ("descripcion", "str", "Description"),
-    ("hostname", "str", "Host name"),
-    ("host", "str", "Host address"),
-    ("servidor_log", "str", "Log server"),
 ]
 
 TEMPLATE_DEFS: list[dict] = [
@@ -189,8 +185,43 @@ TEMPLATE_DEFS: list[dict] = [
         "name": "hello.py",
         "version": 1,
         "category": "python",
-        "content": 'print("hello from template hello.py")\n',
-        "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}},
+        "content": {
+            "language": "python",
+            "source": 'print("hello from template hello.py")\n',
+            "description": "Hello template",
+        },
+        "input_schema": {
+            "type": "object",
+            "required": ["source"],
+            "properties": {
+                "language": {"type": "string"},
+                "source": {"type": "string"},
+                "description": {"type": "string"},
+            },
+        },
+    },
+]
+
+RESOURCE_TYPE_DEFS: list[dict] = [
+    {
+        "name": "mobile_device",
+        "description": "Mobile test device (udid, plataforma, ...)",
+        "schema": {
+            "type": "object",
+            "required": ["udid", "nombre", "plataforma"],
+            "properties": {
+                "udid": {"type": "string"},
+                "nombre": {"type": "string"},
+                "plataforma": {"type": "string"},
+                "version_plataforma": {"type": "string"},
+                "descripcion": {"type": "string"},
+                "monitor": {"type": "string"},
+                "nodo": {"type": "string"},
+                "hostname": {"type": "string"},
+                "host": {"type": "string"},
+                "servidor_log": {"type": "string"},
+            },
+        },
     },
 ]
 
@@ -198,14 +229,15 @@ RESOURCE_DEFS: list[dict] = [
     {
         "name": "Moto G6 3",
         "identifier": "ZY323S5GHW",
-        "platform": "android",
-        "platform_version": "8.0.0",
-        "description": "random device",
-        "metadata": {
+        "resource_type": "mobile_device",
+        "data": {
+            "udid": "ZY323S5GHW",
+            "nombre": "Moto G6 3",
+            "plataforma": "android",
+            "version_plataforma": "8.0.0",
+            "descripcion": "random device",
             "monitor": "monitor-01",
             "nodo": "nodo-lab",
-            "nombre": "Moto G6 3",
-            "descripcion": "random device",
             "hostname": "moto-g6-3.lab",
             "host": "10.0.0.31",
             "servidor_log": "logs.lab.local",
@@ -219,7 +251,7 @@ GROUP_DEFS: list[dict] = [
 
 
 async def seed_catalog(db: AsyncSession) -> None:
-    """Idempotent catalog seed (Stage 2)."""
+    """Idempotent catalog + resource seed (JSON content/data + types)."""
     admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one()
 
     cats: dict[str, TemplateCategory] = {}
@@ -248,16 +280,27 @@ async def seed_catalog(db: AsyncSession) -> None:
                     created_by=admin.id,
                 )
             )
+        else:
+            # Migrate legacy TEXT content (plain string) to JSON object.
+            if isinstance(existing.content, str):
+                existing.content = {
+                    "language": "python",
+                    "source": existing.content,
+                }
+                if existing.input_schema is None:
+                    existing.input_schema = tdef["input_schema"]
     await db.flush()
 
-    defns: dict[str, MetadataDefinition] = {}
-    for key, vtype, desc in METADATA_DEFS:
-        d = (await db.execute(select(MetadataDefinition).where(MetadataDefinition.key == key))).scalar_one_or_none()
-        if d is None:
-            d = MetadataDefinition(key=key, value_type=vtype, description=desc)
-            db.add(d)
+    types: dict[str, ResourceType] = {}
+    for tdef in RESOURCE_TYPE_DEFS:
+        t = (await db.execute(select(ResourceType).where(ResourceType.name == tdef["name"]))).scalar_one_or_none()
+        if t is None:
+            t = ResourceType(
+                name=tdef["name"], description=tdef["description"], schema=tdef["schema"]
+            )
+            db.add(t)
             await db.flush()
-        defns[key] = d
+        types[tdef["name"]] = t
 
     resources: dict[str, Resource] = {}
     for rdef in RESOURCE_DEFS:
@@ -266,24 +309,27 @@ async def seed_catalog(db: AsyncSession) -> None:
             r = Resource(
                 name=rdef["name"],
                 identifier=rdef["identifier"],
-                platform=rdef["platform"],
-                platform_version=rdef["platform_version"],
-                description=rdef["description"],
+                resource_type_id=types[rdef["resource_type"]].id,
+                data=rdef["data"],
             )
             db.add(r)
             await db.flush()
+        else:
+            # Migrate legacy columns (platform/extra/...) into data JSON when present.
+            if not r.data:
+                legacy_data = dict(rdef["data"])
+                for attr in ("platform", "platform_version", "description", "extra"):
+                    if hasattr(r, attr):
+                        try:
+                            val = getattr(r, attr)
+                        except AttributeError:
+                            continue
+                        if val and attr not in legacy_data:
+                            legacy_data[attr] = val
+                r.data = legacy_data
+            if not r.resource_type_id:
+                r.resource_type_id = types[rdef["resource_type"]].id
         resources[rdef["identifier"]] = r
-        for key, value in rdef["metadata"].items():
-            link = (
-                await db.execute(
-                    select(ResourceMetadata).where(
-                        ResourceMetadata.resource_id == r.id,
-                        ResourceMetadata.metadata_def_id == defns[key].id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if link is None:
-                db.add(ResourceMetadata(resource_id=r.id, metadata_def_id=defns[key].id, value=value))
     await db.flush()
 
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
@@ -324,7 +370,7 @@ async def seed_catalog(db: AsyncSession) -> None:
 
 
 async def seed_grants(db: AsyncSession) -> None:
-    """Idempotent grant seed (Stage 3): operator role → hello.py + lab-phones."""
+    """Idempotent grant seed: operator role → hello.py + lab-phones."""
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
     hello = (
         await db.execute(select(Template).where(Template.name == "hello.py"))
@@ -375,7 +421,7 @@ MODE_DEFS: list[tuple[str, str]] = [
 
 
 async def seed_usage(db: AsyncSession) -> None:
-    """Idempotent usage seed (Stage 4): modes + demo 10/day global limit on hello.py."""
+    """Idempotent usage seed: modes + demo 10/day global limit on hello.py."""
     for code, desc in MODE_DEFS:
         m = (await db.execute(select(ExecutionMode).where(ExecutionMode.code == code))).scalar_one_or_none()
         if m is None:
@@ -404,7 +450,7 @@ async def seed_usage(db: AsyncSession) -> None:
 
 
 async def seed_processors(db: AsyncSession) -> str | None:
-    """Idempotent processor seed (Stage 5). Returns a shown-once token note, if any."""
+    """Idempotent processor seed. Returns a shown-once token note, if any."""
     proc = (
         await db.execute(select(ProcessorService).where(ProcessorService.name == "lab-runner"))
     ).scalar_one_or_none()
@@ -427,33 +473,54 @@ STAT_DEFS: list[dict] = [
         "source_type": "internal",
         "query_config": {"resolver": "most_used_template"},
         "required_params": [],
-        "required_permission_code": "stats:view",
     },
     {
         "name": "last_fetch_by_user",
         "source_type": "internal",
         "query_config": {"resolver": "last_fetch_by_user"},
         "required_params": ["user_id"],
-        "required_permission_code": "stats:view",
     },
     {
         "name": "beacon_success_rate",
         "source_type": "internal",
         "query_config": {"resolver": "beacon_success_rate"},
         "required_params": [],
-        "required_permission_code": "stats:view",
     },
 ]
 
 
 async def seed_stats(db: AsyncSession) -> None:
-    """Idempotent stats seed (Stage 7)."""
+    """Idempotent stats seed: definitions + operator-role grants (per-user model)."""
     for sdef in STAT_DEFS:
         existing = (
             await db.execute(select(StatisticDefinition).where(StatisticDefinition.name == sdef["name"]))
         ).scalar_one_or_none()
         if existing is None:
-            db.add(StatisticDefinition(**sdef))
+            existing = StatisticDefinition(**sdef)
+            db.add(existing)
+            await db.flush()
+    await db.flush()
+    operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
+    for sdef in STAT_DEFS:
+        stat = (
+            await db.execute(select(StatisticDefinition).where(StatisticDefinition.name == sdef["name"]))
+        ).scalar_one()
+        grant = (
+            await db.execute(
+                select(StatisticGrant).where(
+                    StatisticGrant.statistic_id == stat.id,
+                    StatisticGrant.principal_type == "role",
+                    StatisticGrant.principal_id == operator_role.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if grant is None:
+            db.add(
+                StatisticGrant(
+                    statistic_id=stat.id, principal_type="role",
+                    principal_id=operator_role.id, can_view=True,
+                )
+            )
     await db.commit()
 
 

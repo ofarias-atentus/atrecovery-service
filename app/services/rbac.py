@@ -98,7 +98,7 @@ async def granted_template_ids(db: AsyncSession, user: User, action: Action) -> 
     flag = "can_view" if action == "view" else "can_use"
     ids: set[int] = set()
     for g in result.scalars().all():
-        # A use grant implies view (fetch returns metadata + content).
+        # A use grant implies view (fetch returns JSON content).
         allowed = getattr(g, flag) or (action == "view" and g.can_use)
         if allowed and _principal_match(g.principal_type, g.principal_id, user, roles, groups):
             ids.add(g.template_id)

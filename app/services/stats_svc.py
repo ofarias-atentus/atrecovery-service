@@ -126,20 +126,79 @@ async def fetch_external(query_config: dict[str, Any], params: dict[str, str]) -
     return {"url": url, "status_code": response.status_code, "data": data}
 
 
+async def _user_role_ids(db: AsyncSession, user: User) -> set[int]:
+    from app.models.identity import UserRole
+
+    result = await db.execute(select(UserRole.role_id).where(UserRole.user_id == user.id))
+    return set(result.scalars().all())
+
+
+async def has_stat_access(db: AsyncSession, user: User, statistic_id: int) -> bool:
+    """Grant check: superuser always; else direct user grant or role grant."""
+    from app.models.stats import StatisticGrant
+
+    if user.is_superuser:
+        return True
+    held_roles = await _user_role_ids(db, user)
+    result = await db.execute(
+        select(StatisticGrant).where(
+            StatisticGrant.statistic_id == statistic_id,
+            StatisticGrant.can_view.is_(True),
+        )
+    )
+    for g in result.scalars().all():
+        if g.principal_type == "user" and g.principal_id == user.id:
+            return True
+        if g.principal_type == "role" and g.principal_id in held_roles:
+            return True
+    return False
+
+
+async def granted_statistic_ids(db: AsyncSession, user: User) -> set[int] | None:
+    """Statistic ids visible to the user, or None for superuser (all)."""
+    from app.models.stats import StatisticGrant
+
+    if user.is_superuser:
+        return None
+    held_roles = await _user_role_ids(db, user)
+    result = await db.execute(
+        select(StatisticGrant).where(StatisticGrant.can_view.is_(True))
+    )
+    ids: set[int] = set()
+    for g in result.scalars().all():
+        if g.principal_type == "user" and g.principal_id == user.id or g.principal_type == "role" and g.principal_id in held_roles:
+            ids.add(g.statistic_id)
+    return ids
+
+
 async def check_stat_access(
-    db: AsyncSession, user: User, required_code: str, params: dict[str, str]
+    db: AsyncSession, user: User, statistic_id: int, params: dict[str, str]
 ) -> None:
-    """Permission code gate + ownership rule for per-user stats."""
+    """Grant gate + ownership rule for per-user stats.
+
+    Different users/roles see different statistics via StatisticGrant rows.
+    ``user_id``-scoped stats additionally require ownership unless the
+    caller holds ``admin:manage`` (admins may query any user).
+    """
     if user.is_superuser:
         return
-    held = await get_user_permissions(db, user)
-    if required_code not in held:
+    if not await has_stat_access(db, user, statistic_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"missing permission: {required_code}",
+            detail="no grant for this statistic",
         )
-    if "user_id" in params and int(params["user_id"]) != user.id and "admin:manage" not in held:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="can only query your own user_id",
-        )
+    if "user_id" in params:
+        try:
+            target = int(params["user_id"])
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="user_id must be an integer",
+            )
+        if target != user.id:
+            held = await get_user_permissions(db, user)
+            if "admin:manage" not in held:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="can only query your own user_id",
+                )

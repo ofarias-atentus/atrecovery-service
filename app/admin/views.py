@@ -30,13 +30,12 @@ from app.models.identity import (
 )
 from app.models.resources import (
     GroupAssignment,
-    MetadataDefinition,
     Resource,
     ResourceGroup,
     ResourceGroupMember,
-    ResourceMetadata,
+    ResourceType,
 )
-from app.models.stats import StatisticDefinition
+from app.models.stats import StatisticDefinition, StatisticGrant
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
 
 
@@ -151,11 +150,7 @@ class ResourceAdmin(_Base, model=Resource):
     pass
 
 
-class MetadataDefinitionAdmin(_Base, model=MetadataDefinition):
-    pass
-
-
-class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
+class ResourceTypeAdmin(_Base, model=ResourceType):
     pass
 
 
@@ -195,6 +190,10 @@ class StatisticDefinitionAdmin(_Base, model=StatisticDefinition):
     pass
 
 
+class StatisticGrantAdmin(_Base, model=StatisticGrant):
+    pass
+
+
 class DocsLinkView(BaseView):
     name = "API Docs"
     icon = "fa-solid fa-book"
@@ -208,11 +207,12 @@ class DocsLinkView(BaseView):
 
 _VIEWS = [
     UserAdmin, RoleAdmin, PermissionAdmin, RolePermissionAdmin, UserRoleAdmin,
-    AuthIdentityAdmin, TemplateCategoryAdmin, TemplateAdmin, ResourceAdmin,
-    MetadataDefinitionAdmin, ResourceMetadataAdmin, ResourceGroupAdmin,
+    AuthIdentityAdmin, TemplateCategoryAdmin, TemplateAdmin, ResourceTypeAdmin,
+    ResourceAdmin, ResourceGroupAdmin,
     ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
     ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin, UsageLimitAdmin,
     ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin, StatisticDefinitionAdmin,
+    StatisticGrantAdmin,
 ]
 
 
