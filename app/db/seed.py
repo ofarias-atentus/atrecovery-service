@@ -10,8 +10,6 @@
 - Grants: operator role can view/use hello.py + lab-phones group.
 - Usage: modes direct/scheduler/voucher + demo limit (hello.py, 10/day).
 - Processors: lab-runner token.
-- Stats: definitions + per-principal StatisticGrant rows (operator role can
-  view all three; different users/roles can be granted differently).
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
 NOTE: schema changed (JSON content/data, resource types, stat grants) —
@@ -42,7 +40,6 @@ from app.models.resources import (
     ResourceMetadata,
     ResourceType,
 )
-from app.models.stats import StatisticDefinition, StatisticGrant
 from app.models.usage import ExecutionMode, UsageLimit
 
 PERMISSION_DEFS: list[tuple[str, str]] = [
@@ -160,7 +157,6 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
     await seed_grants(db)
     await seed_usage(db)
     token_note = await seed_processors(db)
-    await seed_stats(db)
     counts = {
         "permissions": len(PERMISSION_DEFS),
         "roles": len(ROLE_DEFS),
@@ -172,7 +168,6 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "modes": len(MODE_DEFS),
         "limits": 1,
         "processors": 1,
-        "stats": len(STAT_DEFS),
     }
     if token_note:
         print(token_note)
@@ -525,63 +520,6 @@ async def seed_processors(db: AsyncSession) -> str | None:
     )
     await db.commit()
     return f"[seed] lab-runner X-Processor-Token (shown once): {token}"
-
-
-STAT_DEFS: list[dict] = [
-    {
-        "name": "most_used_template",
-        "source_type": "internal",
-        "query_config": {"resolver": "most_used_template"},
-        "required_params": [],
-    },
-    {
-        "name": "last_fetch_by_user",
-        "source_type": "internal",
-        "query_config": {"resolver": "last_fetch_by_user"},
-        "required_params": ["user_id"],
-    },
-    {
-        "name": "beacon_success_rate",
-        "source_type": "internal",
-        "query_config": {"resolver": "beacon_success_rate"},
-        "required_params": [],
-    },
-]
-
-
-async def seed_stats(db: AsyncSession) -> None:
-    """Idempotent stats seed: definitions + operator-role grants (per-user model)."""
-    for sdef in STAT_DEFS:
-        existing = (
-            await db.execute(select(StatisticDefinition).where(StatisticDefinition.name == sdef["name"]))
-        ).scalar_one_or_none()
-        if existing is None:
-            existing = StatisticDefinition(**sdef)
-            db.add(existing)
-            await db.flush()
-    await db.flush()
-    operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
-    for sdef in STAT_DEFS:
-        stat = (
-            await db.execute(select(StatisticDefinition).where(StatisticDefinition.name == sdef["name"]))
-        ).scalar_one()
-        grant = (
-            await db.execute(
-                select(StatisticGrant).where(
-                    StatisticGrant.statistic_id == stat.id,
-                    StatisticGrant.principal_type == "role",
-                    StatisticGrant.principal_id == operator_role.id,
-                )
-            )
-        ).scalar_one_or_none()
-        if grant is None:
-            db.add(
-                StatisticGrant(
-                    statistic_id=stat.id, principal_type="role",
-                    principal_id=operator_role.id, can_view=True,
-                )
-            )
-    await db.commit()
 
 
 async def seed_dev() -> dict[str, int]:

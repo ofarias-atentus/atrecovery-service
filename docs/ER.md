@@ -4,8 +4,6 @@ Templates store JSON ``content`` validated against their category
 ``input_schema``; resources store JSON ``data`` validated against their
 ``resource_types.schema``; resource metadata entries store JSON ``data``
 validated against their ``metadata_types.schema`` (multiple per resource).
-Statistics use per-principal grants (``statistic_grants`` → user/role),
-not permission codes.
 
 ```mermaid
 erDiagram
@@ -34,7 +32,6 @@ erDiagram
     processor_services ||--o{ execution_results : reports
     users ||--o{ activity_logs : performs
     template_usages ||--o{ activity_logs : audited
-    statistics_definitions ||--o{ statistic_grants : grants
 ```
 
 Text version:
@@ -59,16 +56,12 @@ Text version:
 [templates] 1---* [usage_limits]
 [template_usages] 1---* [execution_results] / [processor_services] 1---* [execution_results]
 [users] 1---* [activity_logs] (+ usage/beacon rows reference template_usages)
-[statistics_definitions] 1---* [statistic_grants] -> principal(user|role)
-  (no stats permission codes; different users/roles see different stats)
 ```
 
 Notes:
 - Execution is out-of-scope: `template_usages` only relay dispatch requests;
   `execution_results` are reported by external processors (`X-Processor-Token`).
 - Grants complement coarse permission codes; group grants cover member resources.
-  Statistic visibility is grant-only (per user/role).
 - `activity_logs` is append-only (no update/delete API; read-only in `/admin`).
 - Schema change note: delete pre-existing `data/app.db` before reseeding
-  (category input_schema, resources split into data JSON + typed metadata,
-  `statistics_definitions.required_permission_code` removed).
+  (category input_schema, resources split into data JSON + typed metadata).

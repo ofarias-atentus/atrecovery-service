@@ -1,9 +1,9 @@
 """End-to-end PoC demo (Stage 8).
 
-Expects a seeded server running: see README "Demo". Flow (mirrors plan.md §8):
+Expects a seeded server running: see README "Demo". Flow:
 login both users → operator fetch → voucher usage → processor beacon →
-usage status + beacons → most_used_template stat → denied case (ungranted
-template → 403) → show activity logs. Exits non-zero on the first mismatch.
+usage status + beacons → denied case (ungranted template → 403) →
+show activity logs. Exits non-zero on the first mismatch.
 """
 from __future__ import annotations
 
@@ -67,10 +67,6 @@ def main() -> int:
           and status["external_dispatch_id"] == vid)
     beacons = client.get(f"/api/v1/beacons?usage_id={usage['id']}", headers=operator).json()
     check("beacons listed for usage", len(beacons) == 1 and beacons[0]["status"] == "ok")
-
-    stat = client.get("/api/v1/stats/most_used_template", headers=operator).json()
-    check("most_used_template stat", stat["value"]["template_name"] == "hello.py",
-          str(stat["value"]))
 
     secret = client.post(
         "/api/v1/templates", headers=admin,

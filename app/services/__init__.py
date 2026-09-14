@@ -1,1 +1,1 @@
-"""Services (Stage 3+: rbac, activity, usage_svc, stats_svc)."""
+"""Services (rbac, activity, usage_svc, validation)."""

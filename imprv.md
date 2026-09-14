@@ -5,17 +5,14 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
 
 ## Security & hardening
 
-- **Egress allowlist for external stats** — `fetch_external` currently calls any
-  URL from `query_config` (SSRF risk). Restrict to an allowlisted host/port set
-  via env config.
 - **Rotate demo/dev secrets** — `JWT_SECRET` default and `SEED_PROCESSOR_TOKEN`
   patterns are dev-only. Fail startup when `ENV=prod` and defaults are unchanged.
 - **Rate limiting** — throttle `/auth/token`, `/beacons` (token auth, no JWT)
   and `/usages` (429 paths exist, but no per-IP throttling yet).
 - **Refresh-token rotation + reuse detection** — current refresh flow reuses the
   `jti` family naively; store token family and reject replays.
-- **Audit sensitive reads** — log access to `/admin/*`, grant reads and stat
-  definitions, not just mutations.
+- **Audit sensitive reads** — log access to `/admin/*` and grant reads,
+  not just mutations.
 - **Processor token scopes per endpoint** — `beacon:report` is the only scope;
   add e.g. `usage:read` if processors ever need status polling.
 
@@ -66,6 +63,6 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
 - **Contract tests for the demo** — run `demo/demo.py` in CI against a fresh
   container instead of manually.
 - **Seed profiles** — `--profile demo|minimal|load` instead of one fixed seed;
-  load profile with a Faker-generated fleet for realistic stats/limits testing.
+  load profile with a Faker-generated fleet for realistic limits testing.
 - **Type + lint gate in CI** — add `mypy --strict` (or at least `--ignore-missing-imports`
   off) alongside the existing ruff + pytest gate.

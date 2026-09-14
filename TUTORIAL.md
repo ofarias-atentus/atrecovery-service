@@ -16,10 +16,9 @@ The moving parts, in one sentence each:
 | Category | A template kind (`python`, `json`) that owns the `input_schema` |
 | Resource | A JSON device record (e.g. the `Moto G6 3` phone), validated against its `resource_types.schema` (e.g. `mobile_device`) |
 | Metadata | A separate typed JSON record attached to a resource (e.g. `monitor`); a resource can have several |
-| Grant | Permission row that gives a user/role access to a template, resource, or statistic (deny by default) |
+| Grant | Permission row that gives a user/role access to a template or resource (deny by default) |
 | Usage | A relayed "please run this template" request (`direct`, `scheduler`, or `voucher` mode) |
 | Beacon | A result posted back by an external processor for a usage (auth via `X-Processor-Token`, not JWT) |
-| Statistic | A named readout (e.g. `most_used_template`); visible only with an explicit per-user/role grant |
 
 Demo users (created by the seed): **admin / admin123** (superuser, sees everything) and
 **operator / operator123** (only sees what was granted to the `operator` role).
@@ -31,7 +30,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # defaults are fine for local play
 rm -f data/app.db      # only if you re-seed after a schema change
-python -m app.db.seed  # creates users, hello.py, Moto G6 3, lab-phones group, grants, stats
+python -m app.db.seed  # creates users, hello.py, Moto G6 3, lab-phones group, grants
 uvicorn app.main:app --reload
 ```
 
@@ -214,19 +213,7 @@ usage limits answer **429**. The seed puts a 10/day global limit on `hello.py`
 (`GET /api/v1/usage-limits` as admin to inspect) — hammer the fetch endpoint in a
 loop and you'll see fetch flip to 429 too, since fetches check limits as well.
 
-## 6. Read a statistic (grant-gated, per user/role)
-
-```bash
-curl -s http://127.0.0.1:8000/api/v1/stats/most_used_template \
-  -H "Authorization: Bearer $OP" | python3 -m json.tool
-# → {"name":"most_used_template","value":{"template_name":"hello.py","uses":...}}
-```
-
-There are no `stats:view`-style permission codes: each statistic has explicit grant rows
-(`GET /api/v1/stats/grants`, admin only), so different users can see different stats.
-Try fetching `last_fetch_by_user` for yourself vs. someone else to see the ownership rule.
-
-## 7. Peek at the audit trail and the admin UI
+## 6. Peek at the audit trail and the admin UI
 
 ```bash
 # Every fetch/usage/beacon/grant change appends here (admin only, read-only):
@@ -237,10 +224,10 @@ curl -s http://127.0.0.1:8000/api/v1/activity-logs \
 Then open http://127.0.0.1:8000/admin and log in as `admin` / `admin123`:
 CRUD every table, read-only logs/beacons, credential hashes hidden.
 
-## 8. Run the automated end-to-end demo and the tests
+## 7. Run the automated end-to-end demo and the tests
 
 ```bash
-# Fresh DB + known processor token + demo (mirrors steps 1–7 automatically):
+# Fresh DB + known processor token + demo (mirrors steps 1–6 automatically):
 rm -f data/app.db
 SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
 uvicorn app.main:app --port 8000 &
@@ -256,7 +243,7 @@ pytest -q
 |---|---|
 | `422` creating a template | `content` must satisfy the **category's** `input_schema` (python needs `{"source": ...}`); extra fields like per-template `input_schema` are rejected |
 | `422` creating a resource/metadata | `data` must satisfy the type's `schema` (check `/resource-types` or `/metadata-types`) |
-| `403` on fetch/read/stat | Normal: no grant. Log in as admin and add one (`POST /api/v1/grants/...` or `/api/v1/stats/grants`) |
+| `403` on fetch/read | Normal: no grant. Log in as admin and add one (`POST /api/v1/grants/...`) |
 | `401` on beacons | Beacon auth uses `X-Processor-Token`, not the JWT `Authorization` header |
 | Weird state after pulling changes | Schema changed? `rm -f data/app.db && python -m app.db.seed` and restart |
 
@@ -264,5 +251,5 @@ pytest -q
 
 - `docs/ER.md` — database diagram + table overview
 - `demo/demo.py` — the whole flow in ~90 lines of Python
-- `app/api/v1/` — one file per domain (`templates.py`, `resources.py`, `metadata_types.py`, `usages.py`, `beacons.py`, `stats.py`, `grants.py`, …)
+- `app/api/v1/` — one file per domain (`templates.py`, `resources.py`, `metadata_types.py`, `usages.py`, `beacons.py`, `grants.py`, …)
 - `app/db/seed.py` — every piece of demo data in one place (`CATEGORY_DEFS`, `RESOURCE_TYPE_DEFS`, `METADATA_TYPE_DEFS`, `RESOURCE_DEFS`, …)

@@ -37,7 +37,6 @@ from app.models.resources import (
     ResourceMetadata,
     ResourceType,
 )
-from app.models.stats import StatisticDefinition, StatisticGrant
 from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
 
 
@@ -196,14 +195,6 @@ class UsageLimitAdmin(_Base, model=UsageLimit):
     pass
 
 
-class StatisticDefinitionAdmin(_Base, model=StatisticDefinition):
-    pass
-
-
-class StatisticGrantAdmin(_Base, model=StatisticGrant):
-    pass
-
-
 class DocsLinkView(BaseView):
     name = "API Docs"
     icon = "fa-solid fa-book"
@@ -221,8 +212,7 @@ _VIEWS = [
     MetadataTypeAdmin, ResourceMetadataAdmin, ResourceAdmin, ResourceGroupAdmin,
     ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
     ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin, UsageLimitAdmin,
-    ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin, StatisticDefinitionAdmin,
-    StatisticGrantAdmin,
+    ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin,
 ]
 
 
