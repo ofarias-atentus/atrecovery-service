@@ -64,7 +64,6 @@ def create_app() -> FastAPI:
     from app.api.v1 import categories as categories_router
     from app.api.v1 import grants as grants_router
     from app.api.v1 import groups as groups_router
-    from app.api.v1 import limits as limits_router
     from app.api.v1 import logs as logs_router
     from app.api.v1 import metadata_types as metadata_types_router
     from app.api.v1 import modes as modes_router
@@ -92,7 +91,6 @@ def create_app() -> FastAPI:
     app.include_router(grants_router.router, prefix="/api/v1/grants", tags=["grants"])
     app.include_router(modes_router.router, prefix="/api/v1/execution-modes", tags=["modes"])
     app.include_router(usages_router.router, prefix="/api/v1/usages", tags=["usages"])
-    app.include_router(limits_router.router, prefix="/api/v1/usage-limits", tags=["limits"])
     app.include_router(processors_router.router, prefix="/api/v1/processors", tags=["processors"])
     app.include_router(beacons_router.router, prefix="/api/v1/beacons", tags=["beacons"])
     app.include_router(logs_router.router, prefix="/api/v1/activity-logs", tags=["activity"])

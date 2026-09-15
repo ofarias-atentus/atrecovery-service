@@ -25,7 +25,7 @@ from app.models.resources import (
     ResourceTemplate,
     ResourceType,
 )
-from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
+from app.models.usage import ExecutionMode, TemplateUsage
 
 
 def test_named_models_render_their_name():
@@ -91,10 +91,6 @@ def test_grants_render_target_principal_and_flags():
 def test_usage_tracking_rows_render_context():
     assert str(TemplateUsage(id=12, template_id=1, resource_id=2)) == \
         "template:1 on resource:2 (#12)"
-    assert str(UsageLimit(template_id=1, scope_type="global", scope_id=None,
-                           max_uses=10, window="daily")) == "template:1 global/daily ≤10"
-    assert str(UsageLimit(template_id=1, scope_type="user", scope_id=2,
-                           max_uses=1, window="total")) == "template:1 user:2/total ≤1"
     assert str(ExecutionResult(id=3, usage_id=1, status="ok")) == "usage:1 → ok (#3)"
     assert str(ActivityLog(id=7, action="template.fetch", entity_type="template",
                             entity_id=1)) == "template.fetch template:1 (#7)"
@@ -108,7 +104,6 @@ def test_no_default_object_repr_leaks():
         MetadataType(name="m"), ResourceGroup(name="g"),
         ExecutionMode(code="direct"), ProcessorService(name="p"),
         TemplateUsage(id=1, template_id=1, resource_id=1),
-        UsageLimit(template_id=1, scope_type="global", scope_id=None, max_uses=1, window="total"),
         ExecutionResult(id=1, usage_id=1, status="ok"),
         ActivityLog(id=1, action="a", entity_type="t", entity_id=1),
         TemplateGrant(template_id=1, principal_type="role", principal_id=1),

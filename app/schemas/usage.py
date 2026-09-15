@@ -21,21 +21,6 @@ class ExecutionModeCreate(BaseModel):
     description: str = Field(default="", max_length=255)
 
 
-class UsageLimitCreate(BaseModel):
-    template_id: int
-    scope_type: Literal["global", "user", "role", "group"]
-    scope_id: int | None = None
-    max_uses: int = Field(gt=0)
-    window: Literal["total", "daily", "monthly"] = "total"
-    is_active: bool = True
-
-
-class UsageLimitRead(UsageLimitCreate):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-
-
 class UsageCreate(BaseModel):
     template_id: int
     resource_id: int

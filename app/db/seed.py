@@ -8,7 +8,7 @@
   JSON; typed metadata (monitor) stored separately, multiple per resource;
   lab-phones group assigned to the operator role.
 - Grants: operator role can view/use hello.py + lab-phones group.
-- Usage: modes direct/scheduler/voucher + demo limit (hello.py, 10/day).
+- Usage: modes direct/scheduler/voucher.
 - Processors: lab-runner token.
 
 Run: ``python -m app.db.seed`` (uses DATABASE_URL from env/.env).
@@ -41,7 +41,7 @@ from app.models.resources import (
     ResourceTemplate,
     ResourceType,
 )
-from app.models.usage import ExecutionMode, UsageLimit
+from app.models.usage import ExecutionMode
 
 PERMISSION_DEFS: list[tuple[str, str]] = [
     ("users:manage", "Create/list/update users and assign roles"),
@@ -167,7 +167,6 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
         "metadata_types": len(METADATA_TYPE_DEFS),
         "grants": 2,
         "modes": len(MODE_DEFS),
-        "limits": 1,
         "processors": 1,
     }
     if token_note:
@@ -494,31 +493,11 @@ MODE_DEFS: list[tuple[str, str]] = [
 
 
 async def seed_usage(db: AsyncSession) -> None:
-    """Idempotent usage seed: modes + demo 10/day global limit on hello.py."""
+    """Idempotent usage seed: execution modes."""
     for code, desc in MODE_DEFS:
         m = (await db.execute(select(ExecutionMode).where(ExecutionMode.code == code))).scalar_one_or_none()
         if m is None:
             db.add(ExecutionMode(code=code, description=desc))
-    await db.flush()
-    hello = (
-        await db.execute(select(Template).where(Template.name == "hello.py"))
-    ).scalar_one()
-    lim = (
-        await db.execute(
-            select(UsageLimit).where(
-                UsageLimit.template_id == hello.id,
-                UsageLimit.scope_type == "global",
-                UsageLimit.window == "daily",
-            )
-        )
-    ).scalar_one_or_none()
-    if lim is None:
-        db.add(
-            UsageLimit(
-                template_id=hello.id, scope_type="global", scope_id=None,
-                max_uses=10, window="daily",
-            )
-        )
     await db.commit()
 
 

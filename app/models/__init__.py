@@ -24,4 +24,4 @@ from app.models.resources import (  # noqa: F401
     ResourceTemplate,
     ResourceType,
 )
-from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit  # noqa: F401
+from app.models.usage import ExecutionMode, TemplateUsage  # noqa: F401

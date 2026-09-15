@@ -1,4 +1,4 @@
-"""Stage 4 tests: modes, usage CRUD per mode, voucher flow, grant gates, limits."""
+"""Stage 4 tests: modes, usage CRUD per mode, voucher flow, grant gates."""
 from tests.conftest import auth_headers, login
 
 
@@ -184,83 +184,6 @@ async def test_usage_grant_and_input_gates(client):
     assert (await client.get("/api/v1/usages/9999", headers=op)).status_code == 404
 
 
-async def test_global_total_limit_blocks_usage_and_fetch(client):
-    admin, op = await _admin(client), await _operator(client)
-    tpl = (
-        await client.post(
-            "/api/v1/templates", headers=admin,
-            json={"name": "limited.py", "category_id": 1, "content": {"source": "x"}},
-        )
-    ).json()
-    opid = await _operator_id(client, admin)
-    await client.post(
-        "/api/v1/grants/templates", headers=admin,
-        json={"template_id": tpl["id"], "principal_type": "user", "principal_id": opid,
-              "can_view": True, "can_use": True},
-    )
-    res = (
-        await client.post(
-            "/api/v1/resources", headers=admin, json={"name": "Lim", "identifier": "LIM-1"}
-        )
-    ).json()
-    await _grant_resource(client, admin, res["id"], "user", opid)
-    await _link(client, admin, res["id"], tpl["id"])
-    lim = (
-        await client.post(
-            "/api/v1/usage-limits", headers=admin,
-            json={"template_id": tpl["id"], "scope_type": "global", "max_uses": 1, "window": "total"},
-        )
-    ).json()
-    assert (
-        await client.post(
-            "/api/v1/usages", headers=op,
-            json={"template_id": tpl["id"], "resource_id": res["id"]},
-        )
-    ).status_code == 201
-    blocked = await client.post(
-        "/api/v1/usages", headers=op,
-        json={"template_id": tpl["id"], "resource_id": res["id"]},
-    )
-    assert blocked.status_code == 429
-    assert (await client.get(f"/api/v1/templates/{tpl['id']}/fetch", headers=op)).status_code == 429
-    await client.delete(f"/api/v1/usage-limits/{lim['id']}", headers=admin)
-    assert (await client.get(f"/api/v1/templates/{tpl['id']}/fetch", headers=op)).status_code == 200
-
-
-async def test_user_scoped_limit_counts_only_that_user(client):
-    admin, op = await _admin(client), await _operator(client)
-    tpl = (
-        await client.post(
-            "/api/v1/templates", headers=admin,
-            json={"name": "scoped.py", "category_id": 1, "content": {"source": "x"}},
-        )
-    ).json()
-    opid = await _operator_id(client, admin)
-    await client.post(
-        "/api/v1/grants/templates", headers=admin,
-        json={"template_id": tpl["id"], "principal_type": "user", "principal_id": opid,
-              "can_view": True, "can_use": True},
-    )
-    res = (
-        await client.post(
-            "/api/v1/resources", headers=admin, json={"name": "Scoped", "identifier": "SCOPED-1"}
-        )
-    ).json()
-    await _grant_resource(client, admin, res["id"], "user", opid)
-    await _link(client, admin, res["id"], tpl["id"])
-    await client.post(
-        "/api/v1/usage-limits", headers=admin,
-        json={"template_id": tpl["id"], "scope_type": "user", "scope_id": opid,
-              "max_uses": 1, "window": "total"},
-    )
-    # admin (different user) is unaffected and does not consume the quota;
-    # association is enforced for everyone, so admin also names the resource
-    assert (await client.post("/api/v1/usages", headers=admin, json={"template_id": tpl["id"], "resource_id": res["id"]})).status_code == 201
-    assert (await client.post("/api/v1/usages", headers=admin, json={"template_id": tpl["id"], "resource_id": res["id"]})).status_code == 201
-    assert (await client.post("/api/v1/usages", headers=op, json={"template_id": tpl["id"], "resource_id": res["id"]})).status_code == 201
-    assert (await client.post("/api/v1/usages", headers=op, json={"template_id": tpl["id"], "resource_id": res["id"]})).status_code == 429
-
-
 async def test_usage_visibility_scoped_to_owner(client):
     admin, op = await _admin(client), await _operator(client)
     hello, moto = await _hello(client, op), await _moto(client, op)
@@ -366,39 +289,3 @@ async def test_resource_template_association_discovery_and_enforcement(client):
             json={"template_id": other["id"], "resource_id": moto["id"]},
         )
     ).status_code == 422
-
-
-async def test_limits_admin_only_and_validated(client):
-    admin, op = await _admin(client), await _operator(client)
-    hello = await _hello(client, op)
-    assert (
-        await client.post(
-            "/api/v1/usage-limits", headers=op,
-            json={"template_id": hello["id"], "scope_type": "global", "max_uses": 1},
-        )
-    ).status_code == 403
-    assert (await client.get("/api/v1/usage-limits", headers=op)).status_code == 403
-    # global takes no scope_id; non-global requires one; unknown refs 404
-    bad_global = await client.post(
-        "/api/v1/usage-limits", headers=admin,
-        json={"template_id": hello["id"], "scope_type": "global", "scope_id": 1, "max_uses": 1},
-    )
-    assert bad_global.status_code == 422
-    missing_scope = await client.post(
-        "/api/v1/usage-limits", headers=admin,
-        json={"template_id": hello["id"], "scope_type": "user", "max_uses": 1},
-    )
-    assert missing_scope.status_code == 422
-    assert (
-        await client.post(
-            "/api/v1/usage-limits", headers=admin,
-            json={"template_id": 9999, "scope_type": "global", "max_uses": 1},
-        )
-    ).status_code == 404
-    assert (
-        await client.post(
-            "/api/v1/usage-limits", headers=admin,
-            json={"template_id": hello["id"], "scope_type": "user", "scope_id": 9999, "max_uses": 1},
-        )
-    ).status_code == 404
-    assert (await client.delete("/api/v1/usage-limits/9999", headers=admin)).status_code == 404

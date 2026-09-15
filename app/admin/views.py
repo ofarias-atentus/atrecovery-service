@@ -50,7 +50,7 @@ from app.models.resources import (
     ResourceTemplate,
     ResourceType,
 )
-from app.models.usage import ExecutionMode, TemplateUsage, UsageLimit
+from app.models.usage import ExecutionMode, TemplateUsage
 
 
 def _sync_session_factory() -> sessionmaker:
@@ -192,19 +192,6 @@ def _fmt_principal(m, _a) -> str:
         obj = session.get(model, m.principal_id)
         label = str(obj) if obj is not None else str(m.principal_id)
         return f"{m.principal_type}:{label}"
-
-
-def _fmt_scope(m, _a) -> str:
-    """Usage-limit scope: ``global (all)`` or ``user:operator`` / ``role:…`` / ``group:…``."""
-    if m.scope_id is None:
-        return f"{m.scope_type} (all)"
-    model = _PRINCIPAL_MODELS.get(m.scope_type)
-    if model is None:
-        return f"{m.scope_type}:{m.scope_id}"
-    with _sync_session_factory()() as session:
-        obj = session.get(model, m.scope_id)
-        label = str(obj) if obj is not None else str(m.scope_id)
-        return f"{m.scope_type}:{label}"
 
 
 def _fmt_usage(m, _a) -> str:
@@ -427,13 +414,6 @@ class TemplateUsageAdmin(_Base, model=TemplateUsage):
     column_formatters_detail = {"template_id": _fmt_template, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
 
 
-class UsageLimitAdmin(_Base, model=UsageLimit):
-    column_list = ["template_id", "scope_type", "scope_id", "max_uses", "window", "is_active"]  # noqa: RUF012
-    column_labels = {"template_id": "template", "scope_type": "scope type", "scope_id": "scope", "max_uses": "max uses"}  # noqa: RUF012
-    column_formatters = {"template_id": _fmt_template, "scope_id": _fmt_scope}  # noqa: RUF012
-    column_formatters_detail = {"template_id": _fmt_template, "scope_id": _fmt_scope}  # noqa: RUF012
-
-
 class DocsLinkView(BaseView):
     name = "API Docs"
     icon = "fa-solid fa-book"
@@ -451,7 +431,7 @@ _VIEWS = [
     MetadataTypeAdmin, ResourceMetadataAdmin, ResourceTemplateAdmin, ResourceAdmin,
     ResourceGroupAdmin,
     ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
-    ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin, UsageLimitAdmin,
+    ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin,
     ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin,
 ]
 

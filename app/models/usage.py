@@ -1,4 +1,4 @@
-"""Usage-layer models (Stage 4): execution modes, template usages, usage limits.
+"""Usage-layer models (Stage 4): execution modes, template usages.
 
 Execution is out-of-scope and owned by external systems: rows only relay
 dispatch requests (direct / scheduler / voucher) and record state reported
@@ -60,23 +60,3 @@ class TemplateUsage(Base):
 
     def __str__(self) -> str:
         return f"template:{self.template_id} on resource:{self.resource_id} (#{self.id or '?'})"
-
-
-class UsageLimit(Base):
-    """Max uses of one template per scope × window. One template → many limits."""
-
-    __tablename__ = "usage_limits"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), index=True
-    )
-    scope_type: Mapped[str] = mapped_column(String(10), index=True)  # global|user|role|group
-    scope_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    max_uses: Mapped[int] = mapped_column(Integer)
-    window: Mapped[str] = mapped_column(String(10))  # total|daily|monthly
-
-    def __str__(self) -> str:
-        scope = self.scope_type if self.scope_id is None else f"{self.scope_type}:{self.scope_id}"
-        return f"template:{self.template_id} {scope}/{self.window} ≤{self.max_uses}"
-    is_active: Mapped[bool] = mapped_column(default=True)

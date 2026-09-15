@@ -300,7 +300,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -d "{\"template_id\":$TPL,\"resource_id\":$PIX}" | python3 -m json.tool  # → 201
 ```
 
-### 6e. List usages and watch the limits
+### 6e. List usages
 
 ```bash
 # Operators see only their own usages; admins see everyone's (try both tokens):
@@ -309,10 +309,7 @@ curl -s "http://127.0.0.1:8000/api/v1/usages?template_id=$TPL" \
   -H "Authorization: Bearer $ADMIN" | python3 -m json.tool
 ```
 
-Two guards to know about: an unknown `mode` is rejected with 422, and exhausted
-usage limits answer **429**. The seed puts a 10/day global limit on `hello.py`
-(`GET /api/v1/usage-limits` as admin to inspect) — hammer the fetch endpoint in a
-loop and you'll see fetch flip to 429 too, since fetches check limits as well.
+One guard to know about: an unknown `mode` is rejected with 422.
 
 ## 7. Peek at the audit trail and the admin UI
 

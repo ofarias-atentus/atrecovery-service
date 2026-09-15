@@ -17,7 +17,6 @@ from app.models.identity import User
 from app.schemas.catalog import TemplateCreate, TemplateFetch, TemplateRead, TemplateUpdate
 from app.services.activity import TEMPLATE_FETCH, client_ip, log_activity
 from app.services.rbac import granted_template_ids, require_template_access
-from app.services.usage_svc import LimitExceeded, check_limits
 from app.services.validation import category_schema, validate_json_data
 
 router = APIRouter()
@@ -79,10 +78,6 @@ async def fetch_template(
     # Stage 6 adds activity logging.
     if not t.is_active:
         raise HTTPException(status_code=404, detail="template not found")
-    try:
-        await check_limits(db, user, t.id)
-    except LimitExceeded as e:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e)) from e
     await log_activity(
         db, action=TEMPLATE_FETCH, user_id=user.id,
         entity_type="template", entity_id=t.id, ip=client_ip(request),
