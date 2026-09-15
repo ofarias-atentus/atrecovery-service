@@ -10,12 +10,13 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import bcrypt
 import jwt
 
 from app.core.config import get_settings
+from app.core.time import utcnow
 
 _BCRYPT_MAX_BYTES = 72
 
@@ -46,7 +47,7 @@ def generate_service_token() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(UTC)
+    return utcnow()
 
 
 def create_access_token(subject: str) -> str:

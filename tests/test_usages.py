@@ -111,8 +111,11 @@ async def test_scheduler_requires_valid_cron(client):
     assert u["status"] == "pending" and u["payload"] == {"name": "ops"}
     assert u["cron"] == "*/15 * * * *"
     assert u["next_fire_at"] is not None
-    from datetime import UTC, datetime
-    assert datetime.fromisoformat(u["next_fire_at"]) > datetime.now(UTC).replace(tzinfo=None)
+    from datetime import datetime
+
+    from app.core.time import utcnow_naive
+
+    assert datetime.fromisoformat(u["next_fire_at"]) > utcnow_naive()
     st = (await client.get(f"/api/v1/usages/{u['id']}/status", headers=op)).json()
     assert st["cron"] == "*/15 * * * *" and st["next_fire_at"] == u["next_fire_at"]
 

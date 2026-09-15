@@ -15,7 +15,6 @@ resolve FK ids to names. Detail pages keep every column for debugging.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -34,6 +33,7 @@ from app.core.security import (
     hash_service_token,
     verify_password,
 )
+from app.core.time import utcnow_naive
 from app.models.activity import ActivityLog
 from app.models.beacons import ExecutionResult, ProcessorService
 from app.models.catalog import Routine, RoutineCategory
@@ -129,7 +129,7 @@ class _Base(ModelView):
             # Let server_default fill updated_at on insert as well.
             data.pop("updated_at", None)
         elif hasattr(model, "updated_at"):
-            data["updated_at"] = datetime.now(UTC)
+            data["updated_at"] = utcnow_naive()
         else:
             data.pop("updated_at", None)
 

@@ -97,7 +97,7 @@ Stack (fixed):
     ER.md                # mermaid + text diagram
 ```
 
-Conventions: async everywhere, DI via `Depends`, pagination `?limit&offset`, soft `is_active`, `created_at/updated_at`, never leak `hashed_password` / raw tokens.
+Conventions: async everywhere, DI via `Depends`, pagination `?limit&offset`, soft `is_active`, `created_at/updated_at`, never leak `hashed_password` / raw tokens. All datetimes UTC: naive UTC for DB/domain (`app/core/time.utcnow_naive`), aware UTC for JWT claims only.
 
 ---
 

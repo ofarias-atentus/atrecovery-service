@@ -5,23 +5,19 @@ All timestamps naive UTC to match SQLite storage.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.time import utcnow_naive
 from app.models.catalog import Routine
 from app.models.identity import User
 from app.models.resources import Resource, ResourceRoutine
 from app.models.usage import ExecutionMode, RoutineUsage
 from app.schemas.usage import UsageCreate
 from app.services.rbac import has_resource_access, has_routine_access
-
-
-def _utcnow_naive() -> datetime:
-    # SQLite stores naive timestamps; strip tz so window comparisons line up.
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def validate_cron(expr: str) -> None:
@@ -49,7 +45,7 @@ def next_fire_at(cron: str | None) -> datetime | None:
     try:
         from croniter import CroniterBadCronError, CroniterBadDateError, croniter
 
-        return croniter(cron, _utcnow_naive()).get_next(datetime)
+        return croniter(cron, utcnow_naive()).get_next(datetime)
     except (CroniterBadCronError, CroniterBadDateError, ValueError):
         return None
 
