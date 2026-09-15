@@ -4,7 +4,9 @@ Mounted at ``/admin`` via ``setup_admin(app)``. Auth: local username/password
 login; only active superusers or holders of ``admin:manage`` get a session.
 ``ActivityLog`` and ``ExecutionResult`` are read-only; credential hashes are
 excluded from list/detail, and exposed in forms as write-only password inputs
-(hashed in ``on_model_change``).
+(hashed in ``on_model_change``). Timestamps (``created_at``/``updated_at``/
+``received_at``) are excluded from forms: set automatically on insert, with
+``updated_at`` refreshed on edit and ``created_at``/``received_at`` immutable.
 
 Lists show human labels (names, not raw ids): models define ``__str__`` and
 views add ``column_list`` / ``column_labels`` / ``column_formatters`` that
@@ -12,6 +14,7 @@ resolve FK ids to names. Detail pages keep every column for debugging.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -103,6 +106,26 @@ class AdminAuth(AuthenticationBackend):
 
 class _Base(ModelView):
     page_size = 50
+    # Timestamps are fully automatic: created on insert, updated_at refreshed
+    # on edit. They stay visible in list/detail but never appear in forms.
+    # NOTE: subclasses using explicit form_columns (UserAdmin, ProcessorAdmin)
+    # already omit timestamps; the pops in on_model_change below are still
+    # needed there as a guard against crafted POSTs (include beats exclude
+    # in sqladmin's _build_column_list).
+    form_excluded_columns = ["created_at", "updated_at", "received_at"]  # noqa: RUF012
+
+    async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        # created_at / received_at are immutable: always ignore user input so
+        # the DB server_default fires on insert and rows stay stable on edit.
+        data.pop("created_at", None)
+        data.pop("received_at", None)
+        if is_created:
+            # Let server_default fill updated_at on insert as well.
+            data.pop("updated_at", None)
+        elif hasattr(model, "updated_at"):
+            data["updated_at"] = datetime.now(UTC)
+        else:
+            data.pop("updated_at", None)
 
 
 # ---- human-readable display helpers ----
@@ -231,6 +254,7 @@ class UserAdmin(_Base, model=User):
     form_args = {"hashed_password": {"label": "Password", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        await super().on_model_change(data, model, is_created, request)
         raw = data.get("hashed_password")
         password = raw if isinstance(raw, str) and raw else ""
         if is_created and not password:
@@ -254,6 +278,7 @@ class ProcessorAdmin(_Base, model=ProcessorService):
     form_args = {"token_hash": {"label": "Raw token", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        await super().on_model_change(data, model, is_created, request)
         raw = data.get("token_hash")
         token = raw if isinstance(raw, str) and raw else ""
         if is_created and not token:
