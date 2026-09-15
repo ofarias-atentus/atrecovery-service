@@ -3,8 +3,9 @@
 Mounted at ``/admin`` via ``setup_admin(app)``. Auth: local username/password
 login; only active superusers or holders of ``admin:manage`` get a session.
 ``ActivityLog`` and ``ExecutionResult`` are read-only; credential hashes are
-excluded from list/detail, and exposed in forms as write-only password inputs
-(hashed in ``on_model_change``). Timestamps (``created_at``/``updated_at``/
+excluded from list/detail. User passwords use a write-only form input (hashed
+in ``on_model_change``); processor tokens are auto-generated on create (like
+the API) and shown once via flash. Timestamps (``created_at``/``updated_at``/
 ``received_at``) are excluded from forms: set automatically on insert, with
 ``updated_at`` refreshed on edit and ``created_at``/``received_at`` immutable.
 
@@ -18,7 +19,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
-from sqladmin import Admin, BaseView, ModelView, expose
+from sqladmin import Admin, BaseView, Flash, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -27,7 +28,12 @@ from wtforms import PasswordField
 from wtforms.validators import Length, Optional
 
 from app.core.config import get_settings
-from app.core.security import hash_password, hash_service_token, verify_password
+from app.core.security import (
+    generate_service_token,
+    hash_password,
+    hash_service_token,
+    verify_password,
+)
 from app.models.activity import ActivityLog
 from app.models.beacons import ExecutionResult, ProcessorService
 from app.models.catalog import Template, TemplateCategory
@@ -258,23 +264,36 @@ class ProcessorAdmin(_Base, model=ProcessorService):
     column_list = ["name", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
     column_details_exclude_list = ["token_hash"]  # noqa: RUF012
-    # token_hash is exposed as a write-only raw-token input and
-    # sha256-hashed in on_model_change below. Blank on edit keeps old hash.
-    form_columns = ["name", "is_active", "token_hash"]  # noqa: RUF012
-    form_overrides = {"token_hash": PasswordField}  # noqa: RUF012
-    form_args = {"token_hash": {"label": "Raw token", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
+    # The raw token is never typed in: it is auto-generated on create (like
+    # the API), sha256-hashed before persist, and shown once via flash.
+    # Token is immutable from the admin; rotation is a separate feature.
+    form_columns = ["name", "is_active"]  # noqa: RUF012
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
         await super().on_model_change(data, model, is_created, request)
-        raw = data.get("token_hash")
-        token = raw if isinstance(raw, str) and raw else ""
-        if is_created and not token:
-            raise ValueError("Raw token is required")
-        if token:
-            data["token_hash"] = hash_service_token(token)
-        else:
-            # Edit with blank input: leave the stored hash untouched.
-            data.pop("token_hash", None)
+        # Ignore any forged token_hash input: the token always comes from
+        # the generator, so the raw value only ever lives on request.state.
+        data.pop("token_hash", None)
+        if is_created:
+            raw = generate_service_token()
+            data["token_hash"] = hash_service_token(raw)
+            request.state.generated_processor_token = raw
+            # The form has no scopes input: default like the API so the new
+            # processor can actually report beacons.
+            if not data.get("scopes"):
+                data["scopes"] = ["beacon:report"]
+
+    async def after_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        # Implicit None return = normal sqladmin redirect; the toast rides along.
+        if is_created:
+            raw = getattr(request.state, "generated_processor_token", "")
+            if raw:
+                Flash.success(
+                    request,
+                    f"Processor '{model.name}' token (copy now — shown only once): {raw}",
+                    "Processor token",
+                )
+                delattr(request.state, "generated_processor_token")
 
 
 class ActivityLogAdmin(_Base, model=ActivityLog):
