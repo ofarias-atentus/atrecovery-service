@@ -1,8 +1,7 @@
 """Usage-layer models (Stage 4): execution modes, routine usages.
 
-Execution is out-of-scope and owned by external systems: rows only relay
-dispatch requests (direct / scheduler / voucher) and record state reported
-via beacons. Scheduler usages carry a cron expression describing recurrence;
+Rows relay dispatch requests (direct / scheduler / voucher) and record state
+reported via beacons. Scheduler usages carry a cron expression describing recurrence;
 the external executor reads it (plus the read-time ``next_fire_at`` hint)
 and decides when to fire — nothing in this codebase ticks or dispatches.
 """

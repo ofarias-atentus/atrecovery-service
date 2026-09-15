@@ -1,4 +1,4 @@
-"""Routines router (retrieve/maintain/categorize; execution is out-of-scope).
+"""Routines router (retrieve/maintain/categorize).
 
 Routines store JSON ``content`` validated against the owning category
 ``input_schema`` (same mechanism as resource data / metadata validation).

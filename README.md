@@ -1,6 +1,6 @@
 # Atrecovery Service
 
-FastAPI service to retrieve/maintain/categorize **routines** (never "scripts"). Execution is out-of-scope — see `plan.md`.
+FastAPI service to retrieve/maintain/categorize **routines** (never "scripts").
 
 ## Stage 0 — Run
 

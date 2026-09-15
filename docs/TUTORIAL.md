@@ -179,7 +179,7 @@ inside, assigned + granted to the `operator` role.
 
 ## 6. Execute from the resource — direct, scheduler, voucher
 
-This is the "execution is out-of-scope" loop: pick a device, see its routines,
+This is the request/beacon loop: pick a device, see its routines,
 record a request, and an external service later reports the result. Routines never
 execute standalone — every usage names a `resource_id`, and the pair must be
 **associated** (closed world: unassociated → 422). Three modes exist

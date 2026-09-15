@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=__version__,
-        description="Atrecovery Service — retrieve/maintain/categorize routines; execution is out-of-scope (see plan.md).",
+        description="Atrecovery Service — retrieve/maintain/categorize routines.",
         lifespan=lifespan,
     )
     app.add_middleware(RequestIDMiddleware)

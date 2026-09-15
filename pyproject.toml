@@ -1,7 +1,7 @@
 [project]
 name = "atrecovery-service"
 version = "0.1.0"
-description = "Atrecovery Service — FastAPI routine management (retrieve/maintain/categorize, execution out-of-scope)"
+description = "Atrecovery Service — FastAPI routine management (retrieve/maintain/categorize)"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",

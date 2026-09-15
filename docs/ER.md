@@ -65,8 +65,8 @@ Text version:
 ```
 
 Notes:
-- Execution is out-of-scope: `routine_usages` only relay dispatch requests;
-  `execution_results` are reported by external processors (`X-Processor-Token`).
+- `routine_usages` relay dispatch requests; `execution_results` are reported
+  by external processors (`X-Processor-Token`).
 - Grants complement coarse permission codes; group grants cover member resources.
 - `activity_logs` is append-only (no update/delete API; read-only in `/admin`).
 - Schema change note: delete pre-existing `data/app.db` before reseeding
