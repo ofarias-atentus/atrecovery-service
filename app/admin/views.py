@@ -3,7 +3,8 @@
 Mounted at ``/admin`` via ``setup_admin(app)``. Auth: local username/password
 login; only active superusers or holders of ``admin:manage`` get a session.
 ``ActivityLog`` and ``ExecutionResult`` are read-only; credential hashes are
-excluded from list/detail/forms everywhere.
+excluded from list/detail, and exposed in forms as write-only password inputs
+(hashed in ``on_model_change``).
 
 Lists show human labels (names, not raw ids): models define ``__str__`` and
 views add ``column_list`` / ``column_labels`` / ``column_formatters`` that
@@ -11,15 +12,19 @@ resolve FK ids to names. Detail pages keep every column for debugging.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI
 from sqladmin import Admin, BaseView, ModelView, expose
 from sqladmin.authentication import AuthenticationBackend
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.requests import Request
+from wtforms import PasswordField
+from wtforms.validators import Length, Optional
 
 from app.core.config import get_settings
-from app.core.security import verify_password
+from app.core.security import hash_password, hash_service_token, verify_password
 from app.models.activity import ActivityLog
 from app.models.beacons import ExecutionResult, ProcessorService
 from app.models.catalog import Template, TemplateCategory
@@ -219,7 +224,22 @@ class UserAdmin(_Base, model=User):
     column_list = ["username", "email", "roles", "is_superuser", "is_active"]  # noqa: RUF012
     column_searchable_list = ["username", "email"]  # noqa: RUF012
     column_details_exclude_list = ["hashed_password"]  # noqa: RUF012
-    form_excluded_columns = ["hashed_password"]  # noqa: RUF012
+    # hashed_password is exposed as a write-only password input and
+    # bcrypt-hashed in on_model_change below. Blank on edit keeps old hash.
+    form_columns = ["username", "email", "roles", "is_superuser", "is_active", "hashed_password"]  # noqa: RUF012
+    form_overrides = {"hashed_password": PasswordField}  # noqa: RUF012
+    form_args = {"hashed_password": {"label": "Password", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
+
+    async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        raw = data.get("hashed_password")
+        password = raw if isinstance(raw, str) and raw else ""
+        if is_created and not password:
+            raise ValueError("Password is required")
+        if password:
+            data["hashed_password"] = hash_password(password)
+        else:
+            # Edit with blank input: leave the stored hash untouched.
+            data.pop("hashed_password", None)
 
 
 class ProcessorAdmin(_Base, model=ProcessorService):
@@ -227,7 +247,22 @@ class ProcessorAdmin(_Base, model=ProcessorService):
     column_list = ["name", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
     column_details_exclude_list = ["token_hash"]  # noqa: RUF012
-    form_excluded_columns = ["token_hash"]  # noqa: RUF012
+    # token_hash is exposed as a write-only raw-token input and
+    # sha256-hashed in on_model_change below. Blank on edit keeps old hash.
+    form_columns = ["name", "is_active", "token_hash"]  # noqa: RUF012
+    form_overrides = {"token_hash": PasswordField}  # noqa: RUF012
+    form_args = {"token_hash": {"label": "Raw token", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
+
+    async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        raw = data.get("token_hash")
+        token = raw if isinstance(raw, str) and raw else ""
+        if is_created and not token:
+            raise ValueError("Raw token is required")
+        if token:
+            data["token_hash"] = hash_service_token(token)
+        else:
+            # Edit with blank input: leave the stored hash untouched.
+            data.pop("token_hash", None)
 
 
 class ActivityLogAdmin(_Base, model=ActivityLog):
