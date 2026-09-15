@@ -2,7 +2,7 @@
 
 FastAPI service to retrieve/maintain/categorize **routines** (never "scripts").
 
-## Stage 0 — Run
+## Run
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -14,12 +14,13 @@ uvicorn app.main:app --reload
 pytest -q
 ```
 
-## Stages
+## What it does
 
-See `plan.md §6`. Current: **Stage 8 done** (sqladmin at `/admin`
-with local login guard for superuser/`admin:manage`, read-only activity-log and
-beacon views, credential hashes excluded; finalized `docs/ER.md`;
-security pass below).
+- Catalog: categories + routines (JSON `content` validated by category `input_schema`).
+- Inventory: resources + typed metadata + groups (members vs assignments).
+- Access: RBAC codes + object grants (deny by default).
+- Dispatch: usages in `direct`/`scheduler`/`voucher` modes + beacons via `X-Processor-Token`.
+- Audit/Admin: append-only activity logs, sqladmin at `/admin`, OpenAPI at `/docs`.
 
 ## Security notes
 
@@ -34,4 +35,5 @@ security pass below).
 
 - Async everywhere, SQLite via `aiosqlite`, `data/` auto-created (gitignored).
 - Terminology rule: `routine`, not `script`.
-- No real execution — only relay + record (usages/beacons in later stages).
+- Usages record dispatch requests; beacons record results.
+- Docs: `docs/TUTORIAL.md` (walkthrough) · `docs/ER.md` (schema).
