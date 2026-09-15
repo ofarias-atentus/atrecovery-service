@@ -18,24 +18,8 @@ pytest -q
 
 See `plan.md §6`. Current: **Stage 8 done — PoC complete** (sqladmin at `/admin`
 with local login guard for superuser/`admin:manage`, read-only activity-log and
-beacon views, credential hashes excluded; finalized `docs/ER.md`; `demo/demo.py`
-end-to-end; security pass below).
-
-## Demo
-
-```bash
-pip install -r requirements.txt
-rm -f data/app.db
-SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
-uvicorn app.main:app --port 8000 &
-PROCESSOR_TOKEN=lab-runner-demo-token python demo/demo.py
-# docs: http://127.0.0.1:8000/docs | admin: http://127.0.0.1:8000/admin (admin/admin123)
-```
-
-Demo flow: login both users → operator fetch → voucher usage (`V-…`) →
-processor beacon → usage status/beacons →
-ungranted-routine 403 → activity logs. Rotate the demo token via
-`POST /api/v1/processors` afterwards (token shown once, stored hashed).
+beacon views, credential hashes excluded; finalized `docs/ER.md`;
+security pass below).
 
 ## Security notes (PoC pass)
 

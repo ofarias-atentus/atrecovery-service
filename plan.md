@@ -269,11 +269,11 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 - Tasks: `statistics_definitions` CRUD (admin) + `services/stats_svc.py` resolvers (`most_used_routine`, `last_fetch_by_user`, `beacon_success_rate`) + generic external fetcher (`httpx` with timeout + `required_params` validation); `GET /stats/{name}` permission-gated; tests internal + mocked external (respx/httpx mock) + forbidden without permission.
 - Exit: admin can define new stat without code change (for external type); operator access gated.
 
-### Stage 8 — Admin UI, Docs Polish, Demo & Hardening
+### Stage 8 — Admin UI, Docs Polish & Hardening
 
 - Entry: Stages 0–7 green.
-- Tasks: mount `sqladmin` at `/admin` with auth guard; read-only views for logs/results; finalize `docs/ER.md` diagram; `demo/demo.py` end-to-end (seed → login both users → fetch → voucher usage → beacon → status → stats → denied case → show logs); security pass (JWT expiry, CORS, pagination caps, input validation, token redaction); README demo steps.
-- Exit (POC acceptance): `uvicorn` + `python demo/demo.py` passes; `/docs` + `/admin` usable; `pytest` green.
+- Tasks: mount `sqladmin` at `/admin` with auth guard; read-only views for logs/results; finalize `docs/ER.md` diagram; security pass (JWT expiry, CORS, pagination caps, input validation, token redaction).
+- Exit (POC acceptance): `uvicorn` serves; `/docs` + `/admin` usable; `pytest` green.
 
 ---
 
@@ -288,13 +288,12 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 
 ---
 
-## 8. Demo Script (Stage 8)
+## 8. Seed Data (Stage 8)
 
-`demo/demo.py` (httpx) + `app/db/seed.py`:
+`app/db/seed.py`:
 
-1. Seed: roles/permissions, `admin/admin123`, `operator/operator123`, categories `python|json`, routine `hello.py` (python), resource `ZY323S5GHW` + metadata dict, group `lab-phones` assigned to `operator` role, grants, `direct|scheduler|voucher` modes, processor `lab-runner` token, usage limit (e.g. 10/day), stats defs.
-2. Flow: login both → operator `GET /routines/{id}/fetch` → `POST /usages {mode:voucher}` → `external_dispatch_id=V-xxx` → `POST /beacons` (processor token) → `GET /usages/{id}/status` + beacons → `GET /stats/most_used_routine` → negative test (ungranted routine → 403) → print activity logs.
-3. Run: `uvicorn app.main:app --reload` then `python demo/demo.py`. Manual: `/docs`, `/admin` (admin login).
+1. Seed: roles/permissions, `admin/admin123`, `operator/operator123`, categories `python|json`, routine `hello.py` (python), resource `ZY323S5GHW` + metadata dict, group `lab-phones` assigned to `operator` role, grants, `direct|scheduler|voucher` modes, processor `lab-runner` token, stats defs.
+2. Manual verification: `uvicorn app.main:app --reload`, then `/docs`, `/admin` (admin login).
 
 ---
 

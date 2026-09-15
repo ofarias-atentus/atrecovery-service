@@ -61,8 +61,6 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
 
 - **Concurrency tests** — parallel usage creation against a low limit to prove
   no overshoot (needs row-level locking on Postgres; SQLite serializes).
-- **Contract tests for the demo** — run `demo/demo.py` in CI against a fresh
-  container instead of manually.
 - **Seed profiles** — `--profile demo|minimal|load` instead of one fixed seed;
   load profile with a Faker-generated fleet for realistic limits testing.
 - **Type + lint gate in CI** — add `mypy --strict` (or at least `--ignore-missing-imports`

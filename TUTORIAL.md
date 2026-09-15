@@ -429,15 +429,9 @@ curl -s http://127.0.0.1:8000/api/v1/activity-logs \
 Then open http://127.0.0.1:8000/admin and log in as `admin` / `admin123`:
 CRUD every table, read-only logs/beacons, credential hashes hidden.
 
-## 8. Run the automated end-to-end demo and the tests
+## 8. Run the tests
 
 ```bash
-# Fresh DB + known processor token + demo (mirrors steps 1–7 automatically):
-rm -f data/app.db
-SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
-uvicorn app.main:app --port 8000 &
-PROCESSOR_TOKEN=lab-runner-demo-token python demo/demo.py
-
 # Test suite (uses throwaway temp DBs, never touches ./data/app.db):
 pytest -q
 ```
@@ -457,6 +451,5 @@ pytest -q
 ## Where to look next
 
 - `docs/ER.md` — database diagram + table overview
-- `demo/demo.py` — the whole flow in ~90 lines of Python
 - `app/api/v1/` — one file per domain (`routines.py`, `resources.py`, `metadata_types.py`, `usages.py`, `beacons.py`, `grants.py`, …)
 - `app/db/seed.py` — every piece of demo data in one place (`CATEGORY_DEFS`, `RESOURCE_TYPE_DEFS`, `METADATA_TYPE_DEFS`, `RESOURCE_DEFS`, …)
