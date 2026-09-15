@@ -300,7 +300,114 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
   -d "{\"template_id\":$TPL,\"resource_id\":$PIX}" | python3 -m json.tool  # → 201
 ```
 
-### 6e. List usages
+### 6e. Report the result with a beacon (close the loop on a dispatched usage)
+
+A usage is just a request — the result arrives separately as a **beacon** posted
+by the external processor. Take a `direct` dispatch like this one (create it with
+the §6a call; ids below assume a fresh seed):
+
+```json
+{
+    "id": 1,
+    "template_id": 1,
+    "resource_id": 1,
+    "requested_by": 2,
+    "mode": "direct",
+    "status": "dispatched",
+    "external_dispatch_id": null,
+    "cron": null,
+    "next_fire_at": null,
+    "payload": null,
+    "use_count": 1,
+    "created_at": "2026-09-15T15:04:49"
+}
+```
+
+```bash
+# 0) You need a processor token, NOT a JWT. Either seed with a known one:
+#    SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
+#    ...or mint a fresh processor as admin (the token is shown once):
+curl -s -X POST http://127.0.0.1:8000/api/v1/processors \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"name":"my-runner"}' | python3 -m json.tool
+# → {"id":...,"name":"my-runner","scopes":["beacon:report"],"is_active":true,"token":"..."}
+# Save it:  PTOKEN=<paste-token>   (or PTOKEN=lab-runner-demo-token for the seeded runner)
+```
+
+The beacon body is tiny — `usage_id` + `status` + an optional free-form `result`
+dict. The status drives the usage lifecycle: `ok` → `done`, `error` → `failed`,
+`partial` → `running`:
+
+```bash
+# 1) The executor ran hello.py on the Moto G6 and it worked — report success:
+curl -s -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: $PTOKEN" -H "Content-Type: application/json" \
+  -d '{"usage_id":1,"status":"ok","result":{"rc":0,"stdout":"hello from template hello.py"}}' \
+  | python3 -m json.tool
+# → 201 {"id":1,"usage_id":1,"processor_id":1,"status":"ok",
+#         "result":{"rc":0,"stdout":"hello from template hello.py"},
+#         "idem_key":null,"received_at":"..."}
+
+# 2) The usage flipped dispatched → done. Each accepted beacon also bumps use_count (1 → 2):
+curl -s http://127.0.0.1:8000/api/v1/usages/1/status \
+  -H "Authorization: Bearer $OP" | python3 -m json.tool
+# → {"id":1,"mode":"direct","status":"done","beacon_count":1,"latest_beacon_status":"ok",...}
+curl -s http://127.0.0.1:8000/api/v1/usages/1 \
+  -H "Authorization: Bearer $OP" | python3 -c "import sys,json; u=json.load(sys.stdin); print(u['status'], u['use_count'])"
+# → done 2
+```
+
+The other two outcomes work the same way — new usage each time, since one beacon
+per outcome is clearest to follow:
+
+```bash
+# error → failed (executor reports what went wrong in result):
+U2=$(curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+curl -s -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: $PTOKEN" -H "Content-Type: application/json" \
+  -d "{\"usage_id\":$U2,\"status\":\"error\",\"result\":{\"rc\":1,\"stderr\":\"boom\"}}" | python3 -m json.tool
+# → 201 {"status":"error",...}
+curl -s http://127.0.0.1:8000/api/v1/usages/$U2/status \
+  -H "Authorization: Bearer $OP" | python3 -m json.tool
+# → {"status":"failed","beacon_count":1,"latest_beacon_status":"error",...}
+
+# partial → running (still working; report again when finished):
+U3=$(curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d "{\"template_id\":$TPL,\"resource_id\":$RES}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+curl -s -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: $PTOKEN" -H "Content-Type: application/json" \
+  -d "{\"usage_id\":$U3,\"status\":\"partial\",\"result\":{\"pct\":50}}" | python3 -m json.tool
+# → 201 {"status":"partial",...}  (usage is now "running")
+```
+
+Read back what landed, and know the three rejections:
+
+```bash
+# All beacons for usage 1 (operator sees only own usages; admin sees all):
+curl -s "http://127.0.0.1:8000/api/v1/beacons?usage_id=1" \
+  -H "Authorization: Bearer $OP" | python3 -m json.tool
+
+# 401 — beacon auth is X-Processor-Token, never the JWT Authorization header:
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "Authorization: Bearer $OP" -H "Content-Type: application/json" \
+  -d '{"usage_id":1,"status":"ok"}'   # → 401
+
+# 404 — unknown usage id:
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/api/v1/beacons \
+  -H "X-Processor-Token: $PTOKEN" -H "Content-Type: application/json" \
+  -d '{"usage_id":9999,"status":"ok"}'   # → 404
+
+# 403 — the processor was created without the beacon:report scope
+```
+
+Tip: for cron-driven executors that fire repeatedly, add `"idem_key":"cron-001"`
+(§6b): repeating a seen `(usage_id, idem_key)` replays the stored row (**200**)
+instead of appending a duplicate (**201**).
+
+### 6f. List usages
 
 ```bash
 # Operators see only their own usages; admins see everyone's (try both tokens):
