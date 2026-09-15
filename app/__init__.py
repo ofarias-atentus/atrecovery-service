@@ -1,2 +1,2 @@
-"""Routine Management PoC package."""
+"""Atrecovery Service package."""
 __version__ = "0.1.0"

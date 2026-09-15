@@ -48,10 +48,10 @@ class BusinessSSOProvider(AuthProvider):
     name = "business_sso"
 
     async def authenticate(self, db: AsyncSession, username: str, password: str) -> User | None:
-        raise NotImplementedError("BusinessSSOProvider not configured for this PoC")
+        raise NotImplementedError("BusinessSSOProvider not configured")
 
     def get_authorization_url(self) -> str:
-        raise NotImplementedError("BusinessSSOProvider not configured for this PoC")
+        raise NotImplementedError("BusinessSSOProvider not configured")
 
     async def link_identity(
         self, db: AsyncSession, user: User, provider_sub: str, extra: dict | None = None

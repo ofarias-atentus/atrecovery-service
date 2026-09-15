@@ -1,6 +1,6 @@
-# Tutorial — First Steps with the Routine Management PoC
+# Tutorial — First Steps with Atrecovery Service
 
-A hands-on walkthrough to get familiar with what this PoC does. Estimated time: 25–35 minutes.
+A hands-on walkthrough to get familiar with what this service does. Estimated time: 25–35 minutes.
 
 ## What is this?
 
@@ -208,7 +208,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/usages \
 ### 6b. Scheduler — record a cron expression (external systems own execution)
 
 Scheduler mode **requires** `cron` (validated, 5-field format) and optionally
-stores a `payload`. The PoC only records the row — the *external executor* reads
+stores a `payload`. The service only records the row — the *external executor* reads
 `cron` (plus the read-time `next_fire_at` hint) and decides when to fire. Nothing
 here ticks or dispatches (see `imprv.md`).
 

@@ -1,6 +1,6 @@
 # Future Improvements
 
-Candidate follow-ups for the Routine Management PoC, roughly ordered by
+Candidate follow-ups for Atrecovery Service, roughly ordered by
 value/effort. Nothing here is required for the Stage 8 acceptance.
 
 ## Security & hardening
@@ -18,7 +18,7 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
 
 ## Data & migrations
 
-- **Alembic migrations** — `init_db` (`create_all`) is fine for PoC, but any
+- **Alembic migrations** — `init_db` (`create_all`) suffices for now, but any
   real deployment needs versioned migrations before the next schema change.
 - **Move off SQLite** — Postgres + asyncpg for concurrency; WAL mode is already
   assumed but a single file won't scale past one replica.

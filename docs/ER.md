@@ -1,4 +1,4 @@
-# Database ER — Routine Management PoC
+# Database ER — Atrecovery Service
 
 Routines store JSON ``content`` validated against their category
 ``input_schema``; resources store JSON ``data`` validated against their

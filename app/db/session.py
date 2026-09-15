@@ -1,6 +1,6 @@
 """Async engine/session helpers + init_db (Stage 0).
 
-- SQLite PoC via aiosqlite. data/ dir auto-created.
+- SQLite via aiosqlite. data/ dir auto-created.
 - get_db: FastAPI dependency yielding AsyncSession.
 - init_db: create_all for registered models (Alembic optional, later).
 """

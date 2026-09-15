@@ -139,7 +139,7 @@ class _Base(ModelView):
 # sqladmin renders related objects via ``__str__`` (defined on every model),
 # but bare FK id columns (principal_id, requested_by, ...) need explicit
 # formatters. These do one tiny lookup per cell through a throwaway sync
-# session — N+1, acceptable at PoC scale with page_size 50.
+# session — N+1, acceptable at current scale with page_size 50.
 
 def _display_label(model: type, pk: int | None, kind: str) -> str:
     """Resolve a FK id to the row's ``__str__``; fall back to ``kind:id``."""

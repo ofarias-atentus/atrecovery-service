@@ -1,11 +1,11 @@
-# POC Plan — FastAPI Routine Management System
+# Plan — Atrecovery Service (FastAPI Routine Management System)
 
-> Working directory: `/Users/orlando/personal/python/recovery-poc-three` (do not access outside this folder)
+> Working directory: `/Users/orlando/proyectos/research/pocs/atrecovery-service` (do not access outside this folder)
 > Status: PLAN ONLY — no code implemented yet. Each Stage below is independently buildable by a separate agent.
 
 ## 1. Objective
 
-Build a PoC FastAPI application to **retrieve, maintain, and categorize Routines** (mandatory rename: `script` → `routine` everywhere, including DB tables/columns, APIs, UI; only `type/category` data and `python` type remain as-is).
+Build a FastAPI application to **retrieve, maintain, and categorize Routines** (mandatory rename: `script` → `routine` everywhere, including DB tables/columns, APIs, UI; only `type/category` data and `python` type remain as-is).
 
 **Out of scope:** actual script execution. The system only dispatches usage requests and records results via external processor services.
 
@@ -31,7 +31,7 @@ Core capabilities:
 Stack (fixed):
 
 - **Framework:** FastAPI (async)
-- **Database:** SQLAlchemy 2.0 ORM async + SQLite PoC via `aiosqlite`
+- **Database:** SQLAlchemy 2.0 ORM async + SQLite via `aiosqlite`
 - **Auth:** OAuth2 password flow + JWT + `passlib[bcrypt]`
 - **Schemas:** Pydantic v2
 - **Admin:** `sqladmin` (Django-Admin-like CRUD over SQLAlchemy) + minimal custom Jinja2 for read-only logs. Fallback if needed: hand-rolled Jinja2 CRUD.
@@ -72,7 +72,7 @@ Stack (fixed):
       tracking.py        # activity_logs
       stats.py           # statistics_definitions
     schemas/             # Pydantic v2 per domain (Create/Update/Read)
-    repositories/        # thin CRUD (optional for PoC, keep light)
+    repositories/        # thin CRUD (optional, keep light)
     services/
       rbac.py            # permission + grant evaluation, group resolution
       activity.py        # append-only ActivityLogger
@@ -166,7 +166,7 @@ Conventions: async everywhere, DI via `Depends`, pagination `?limit&offset`, sof
 
 - `execution_modes(id PK, code UNIQUE e.g. direct|scheduler|voucher, description)` — adding a row + small service branch adds a new mode.
 - `routine_usages(id PK, routine_id FK, resource_id FK nullable, requested_by FK→users, mode_id FK→modes, status ENUM pending|dispatched|running|done|failed, external_dispatch_id nullable (voucher ID from other system), schedule_at nullable, payload JSON, use_count INT default 1, created_at)`.
-  - Voucher flow: `POST /usages {mode:voucher}` → store + return `external_dispatch_id` → `GET /usages/{id}/status` checks state (PoC: local state + stub for remote check).
+  - Voucher flow: `POST /usages {mode:voucher}` → store + return `external_dispatch_id` → `GET /usages/{id}/status` checks state (local state + stub for remote check).
   - Scheduler flow: store `schedule_at + payload`; actual triggering is external.
   - Direct flow: just a record with `status=dispatched`.
 - `usage_limits(id PK, routine_id FK, scope_type ENUM global|user|role|group, scope_id nullable, max_uses INT, window ENUM total|daily|monthly, is_active BOOL)` — one-to-many per routine. Checked on fetch + usage creation.
@@ -195,7 +195,7 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 - **Auth:** `POST /api/v1/auth/token` (OAuth2 password flow, form-data) → `{access_token, refresh_token, token_type:bearer}`; `POST /auth/refresh`. `LocalProvider` verifies bcrypt. `BusinessSSOProvider` / OAuth2 (Google) as stub interface in `core/auth_providers.py`: `authenticate(credentials) → user`, `link_identity()` — new providers added without touching routers.
 - **RBAC enforcement:** `Depends(get_current_user)` → `Depends(require_permission("routine:use"))` → `require_object_access(routine_id, resource_id)` in service layer. Seed `admin:*`, `operator: routine:view/use, resource:view/use, stats:view (gated per stat)`.
 - **Admin UI (`/admin`):** `sqladmin` ModelViews for all tables; `activity_logs` + `execution_results` registered as read-only (`can_create=False, can_edit=False, can_delete=False`); guard: only `is_superuser` or `admin:manage` permission. Custom Jinja dashboard stub links to `/docs`.
-- **Logging:** `RequestIDMiddleware` (X-Request-ID), uvicorn + app logger to stdout (JSON-ish for PoC), `ActivityLogger.log(user, action, entity...)` called from routine fetch, usage create, beacon ingest, grant/group changes.
+- **Logging:** `RequestIDMiddleware` (X-Request-ID), uvicorn + app logger to stdout (JSON-ish), `ActivityLogger.log(user, action, entity...)` called from routine fetch, usage create, beacon ingest, grant/group changes.
 - **Docs:** auto OpenAPI; every router has `tags`, Pydantic examples; `GET /health`, `GET /version`.
 
 ---
@@ -273,14 +273,14 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 
 - Entry: Stages 0–7 green.
 - Tasks: mount `sqladmin` at `/admin` with auth guard; read-only views for logs/results; finalize `docs/ER.md` diagram; security pass (JWT expiry, CORS, pagination caps, input validation, token redaction).
-- Exit (POC acceptance): `uvicorn` serves; `/docs` + `/admin` usable; `pytest` green.
+- Exit (acceptance): `uvicorn` serves; `/docs` + `/admin` usable; `pytest` green.
 
 ---
 
 ## 7. Security & Best Practices (per technology)
 
 - **FastAPI:** async defs, Depends DI, response_model, status codes (401/403/404/429), pagination caps, CORS allowlist, trusted-host/request-size ready.
-- **SQLAlchemy:** 2.0 typed ORM, async session per request, parameterized queries, migrations-ready (Alembic optional for PoC — `init_db` suffices), SQLite WAL, indexes on `username, identifier, (name,version), usage(routine_id, requested_by), beacon(usage_id), logs(created_at, action)`.
+- **SQLAlchemy:** 2.0 typed ORM, async session per request, parameterized queries, migrations-ready (Alembic deferred — `init_db` suffices), SQLite WAL, indexes on `username, identifier, (name,version), usage(routine_id, requested_by), beacon(usage_id), logs(created_at, action)`.
 - **Pydantic v2:** `BaseModel` with `ConfigDict(from_attributes=True)`, strict types, `Field(examples=...)`, separate Create/Update/Read.
 - **Auth:** bcrypt cost 12, JWT `sub+exp+jti`, short access (30m) + refresh (7d), secrets from env, processor tokens random 32B shown once + sha256 stored, constant-time compare.
 - **Admin:** superuser/`admin:manage` guard, read-only logs/results, audit all grant changes.
@@ -297,7 +297,7 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 
 ---
 
-## 9. Acceptance Criteria (POC done)
+## 9. Acceptance Criteria (done)
 
 - Terminology `routine` everywhere; categories include `python` + `json`.
 - RBAC + grants + groups gate routine/resource access.

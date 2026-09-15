@@ -1,6 +1,6 @@
-# Routine Management PoC
+# Atrecovery Service
 
-FastAPI PoC to retrieve/maintain/categorize **routines** (never "scripts"). Execution is out-of-scope — see `plan.md`.
+FastAPI service to retrieve/maintain/categorize **routines** (never "scripts"). Execution is out-of-scope — see `plan.md`.
 
 ## Stage 0 — Run
 
@@ -16,12 +16,12 @@ pytest -q
 
 ## Stages
 
-See `plan.md §6`. Current: **Stage 8 done — PoC complete** (sqladmin at `/admin`
+See `plan.md §6`. Current: **Stage 8 done** (sqladmin at `/admin`
 with local login guard for superuser/`admin:manage`, read-only activity-log and
 beacon views, credential hashes excluded; finalized `docs/ER.md`;
 security pass below).
 
-## Security notes (PoC pass)
+## Security notes
 
 - JWT access 30m + refresh 7d (env-tunable), secrets from env/`.env`.
 - Processor tokens random 32B, shown once, sha256 at rest, constant-time compare.
