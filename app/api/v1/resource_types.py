@@ -2,7 +2,7 @@
 
 Read: resource:view. Write: resource:manage.
 Types carry an optional JSON Schema (``schema``) that validates
-``Resource.data`` on create/update — same mechanism as template validation.
+``Resource.data`` on create/update — same mechanism as routine validation.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select

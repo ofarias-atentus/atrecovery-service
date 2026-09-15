@@ -2,7 +2,7 @@
 
 - Identity: permissions (no stats permission codes), roles admin/operator,
   users admin/admin123, operator/operator123 with local auth identities.
-- Templates: categories python/json define input_schema; hello.py stored as
+- Routines: categories python/json define input_schema; hello.py stored as
   JSON content validated against its category.
 - Resources: types (mobile_device) + Moto G6 resource with pure device data
   JSON; typed metadata (monitor) stored separately, multiple per resource;
@@ -28,8 +28,8 @@ from app.core.deps import hash_processor_token
 from app.core.security import hash_password
 from app.db.session import get_session_factory, init_db
 from app.models.beacons import ProcessorService
-from app.models.catalog import Template, TemplateCategory
-from app.models.grants import ResourceGrant, TemplateGrant
+from app.models.catalog import Routine, RoutineCategory
+from app.models.grants import ResourceGrant, RoutineGrant
 from app.models.identity import AuthIdentity, Permission, Role, RolePermission, User, UserRole
 from app.models.resources import (
     GroupAssignment,
@@ -38,7 +38,7 @@ from app.models.resources import (
     ResourceGroup,
     ResourceGroupMember,
     ResourceMetadata,
-    ResourceTemplate,
+    ResourceRoutine,
     ResourceType,
 )
 from app.models.usage import ExecutionMode
@@ -46,18 +46,18 @@ from app.models.usage import ExecutionMode
 PERMISSION_DEFS: list[tuple[str, str]] = [
     ("users:manage", "Create/list/update users and assign roles"),
     ("admin:manage", "Full admin control (roles, grants, definitions)"),
-    ("template:view", "List and read templates"),
-    ("template:use", "Fetch/use template content"),
-    ("template:manage", "Create/update/delete templates and categories"),
+    ("routine:view", "List and read routines"),
+    ("routine:use", "Fetch/use routine content"),
+    ("routine:manage", "Create/update/delete routines and categories"),
     ("resource:view", "List and read resources"),
-    ("resource:use", "Use resources in template usages"),
+    ("resource:use", "Use resources in routine usages"),
     ("resource:manage", "Create/update/delete resources, types, groups"),
     ("processors:manage", "Manage processor service tokens"),
 ]
 
 ROLE_DEFS: dict[str, list[str]] = {
     "admin": [code for code, _ in PERMISSION_DEFS],
-    "operator": ["template:view", "template:use", "resource:view", "resource:use"],
+    "operator": ["routine:view", "routine:use", "resource:view", "resource:use"],
 }
 
 USER_DEFS: list[dict] = [
@@ -177,7 +177,7 @@ async def seed_all(db: AsyncSession) -> dict[str, int]:
 CATEGORY_DEFS: list[dict] = [
     {
         "name": "python",
-        "description": "Python templates (JSON content relayed to processor services)",
+        "description": "Python routines (JSON content relayed to processor services)",
         "input_schema": {
             "type": "object",
             "required": ["source"],
@@ -190,20 +190,20 @@ CATEGORY_DEFS: list[dict] = [
     },
     {
         "name": "json",
-        "description": "JSON templates (structured payloads relayed to processor services)",
+        "description": "JSON routines (structured payloads relayed to processor services)",
         "input_schema": {"type": "object"},
     },
 ]
 
-TEMPLATE_DEFS: list[dict] = [
+ROUTINE_DEFS: list[dict] = [
     {
         "name": "hello.py",
         "version": 1,
         "category": "python",
         "content": {
             "language": "python",
-            "source": 'print("hello from template hello.py")\n',
-            "description": "Hello template",
+            "source": 'print("hello from routine hello.py")\n',
+            "description": "Hello routine",
         },
     },
 ]
@@ -268,7 +268,7 @@ RESOURCE_DEFS: list[dict] = [
                 },
             },
         ],
-        "templates": ["hello.py"],
+        "routines": ["hello.py"],
     },
 ]
 
@@ -281,11 +281,11 @@ async def seed_catalog(db: AsyncSession) -> None:
     """Idempotent catalog + resource seed (category input_schema, typed metadata)."""
     admin = (await db.execute(select(User).where(User.username == "admin"))).scalar_one()
 
-    cats: dict[str, TemplateCategory] = {}
+    cats: dict[str, RoutineCategory] = {}
     for cdef in CATEGORY_DEFS:
-        cat = (await db.execute(select(TemplateCategory).where(TemplateCategory.name == cdef["name"]))).scalar_one_or_none()
+        cat = (await db.execute(select(RoutineCategory).where(RoutineCategory.name == cdef["name"]))).scalar_one_or_none()
         if cat is None:
-            cat = TemplateCategory(
+            cat = RoutineCategory(
                 name=cdef["name"], description=cdef["description"],
                 input_schema=cdef.get("input_schema"),
             )
@@ -298,15 +298,15 @@ async def seed_catalog(db: AsyncSession) -> None:
                 cat.input_schema = cdef.get("input_schema") or legacy_hint
         cats[cdef["name"]] = cat
 
-    for tdef in TEMPLATE_DEFS:
+    for tdef in ROUTINE_DEFS:
         existing = (
             await db.execute(
-                select(Template).where(Template.name == tdef["name"], Template.version == tdef["version"])
+                select(Routine).where(Routine.name == tdef["name"], Routine.version == tdef["version"])
             )
         ).scalar_one_or_none()
         if existing is None:
             db.add(
-                Template(
+                Routine(
                     name=tdef["name"],
                     version=tdef["version"],
                     category_id=cats[tdef["category"]].id,
@@ -386,22 +386,22 @@ async def seed_catalog(db: AsyncSession) -> None:
                 )
             else:
                 link.data = dict(mdef["data"])
-        for tname in rdef.get("templates", []):
+        for tname in rdef.get("routines", []):
             tpl = (
-                await db.execute(select(Template).where(Template.name == tname))
+                await db.execute(select(Routine).where(Routine.name == tname))
             ).scalar_one_or_none()
             if tpl is None:
                 continue
             assoc = (
                 await db.execute(
-                    select(ResourceTemplate).where(
-                        ResourceTemplate.resource_id == r.id,
-                        ResourceTemplate.template_id == tpl.id,
+                    select(ResourceRoutine).where(
+                        ResourceRoutine.resource_id == r.id,
+                        ResourceRoutine.routine_id == tpl.id,
                     )
                 )
             ).scalar_one_or_none()
             if assoc is None:
-                db.add(ResourceTemplate(resource_id=r.id, template_id=tpl.id))
+                db.add(ResourceRoutine(resource_id=r.id, routine_id=tpl.id))
     await db.flush()
 
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
@@ -445,24 +445,24 @@ async def seed_grants(db: AsyncSession) -> None:
     """Idempotent grant seed: operator role → hello.py + lab-phones."""
     operator_role = (await db.execute(select(Role).where(Role.name == "operator"))).scalar_one()
     hello = (
-        await db.execute(select(Template).where(Template.name == "hello.py"))
+        await db.execute(select(Routine).where(Routine.name == "hello.py"))
     ).scalar_one()
     lab = (
         await db.execute(select(ResourceGroup).where(ResourceGroup.name == "lab-phones"))
     ).scalar_one()
     tg = (
         await db.execute(
-            select(TemplateGrant).where(
-                TemplateGrant.template_id == hello.id,
-                TemplateGrant.principal_type == "role",
-                TemplateGrant.principal_id == operator_role.id,
+            select(RoutineGrant).where(
+                RoutineGrant.routine_id == hello.id,
+                RoutineGrant.principal_type == "role",
+                RoutineGrant.principal_id == operator_role.id,
             )
         )
     ).scalar_one_or_none()
     if tg is None:
         db.add(
-            TemplateGrant(
-                template_id=hello.id, principal_type="role",
+            RoutineGrant(
+                routine_id=hello.id, principal_type="role",
                 principal_id=operator_role.id, can_view=True, can_use=True,
             )
         )

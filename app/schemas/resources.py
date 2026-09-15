@@ -111,10 +111,10 @@ class ResourceMetadataRead(BaseModel):
     data: dict[str, Any] | None = None
 
 
-class TemplateAttach(BaseModel):
-    """Associate one template with a resource (resource-first execution)."""
+class RoutineAttach(BaseModel):
+    """Associate one routine with a resource (resource-first execution)."""
 
-    template_id: int
+    routine_id: int
 
 
 class ResourceRead(BaseModel):

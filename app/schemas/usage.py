@@ -22,7 +22,7 @@ class ExecutionModeCreate(BaseModel):
 
 
 class UsageCreate(BaseModel):
-    template_id: int
+    routine_id: int
     resource_id: int
     mode: str = "direct"
     cron: str | None = Field(default=None, max_length=64, examples=["*/15 * * * *"])
@@ -33,7 +33,7 @@ class UsageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    template_id: int
+    routine_id: int
     resource_id: int
     requested_by: int
     mode: str = "direct"
@@ -52,7 +52,7 @@ class UsageStatusRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    template_id: int
+    routine_id: int
     mode: str
     status: str
     external_dispatch_id: str | None = None

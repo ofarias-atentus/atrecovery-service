@@ -1,7 +1,7 @@
 """SQLAlchemy 2.0 DeclarativeBase + shared mixins.
 
 Stages 1+ will add concrete models importing Base from here.
-Terminology rule: use `template`, never `script`.
+Terminology rule: use `routine`, never `script`.
 """
 from datetime import datetime
 

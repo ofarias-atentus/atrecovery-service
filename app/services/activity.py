@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.activity import ActivityLog
 
 # Canonical action names (also used by Stage 7 stats resolvers).
-TEMPLATE_FETCH = "template.fetch"
-TEMPLATE_USE = "template.use"
+ROUTINE_FETCH = "routine.fetch"
+ROUTINE_USE = "routine.use"
 BEACON_RECEIVED = "beacon.received"
 GRANT_CHANGED = "grant.changed"
 GROUP_CHANGED = "group.changed"

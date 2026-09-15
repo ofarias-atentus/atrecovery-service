@@ -1,6 +1,6 @@
-"""Template categories router.
+"""Routine categories router.
 
-Read: template:view. Write: template:manage.
+Read: routine:view. Write: routine:manage.
 (Stage 3 will additionally enforce object-level grants.)
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -9,16 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_permission
 from app.db.session import get_db
-from app.models.catalog import TemplateCategory
+from app.models.catalog import RoutineCategory
 from app.models.identity import User
 from app.schemas.catalog import CategoryCreate, CategoryRead, CategoryUpdate
 
 router = APIRouter()
-VIEW = require_permission("template:view")
-MANAGE = require_permission("template:manage")
+VIEW = require_permission("routine:view")
+MANAGE = require_permission("routine:manage")
 
 
-def _to_read(c: TemplateCategory) -> CategoryRead:
+def _to_read(c: RoutineCategory) -> CategoryRead:
     schema = c.input_schema if c.input_schema is not None else getattr(c, "schema_hint", None)
     return CategoryRead(
         id=c.id,
@@ -31,7 +31,7 @@ def _to_read(c: TemplateCategory) -> CategoryRead:
     )
 
 
-@router.get("", response_model=list[CategoryRead], summary="List template categories")
+@router.get("", response_model=list[CategoryRead], summary="List routine categories")
 async def list_categories(
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
@@ -39,7 +39,7 @@ async def list_categories(
     _: User = Depends(VIEW),
 ) -> list[CategoryRead]:
     result = await db.execute(
-        select(TemplateCategory).order_by(TemplateCategory.name).limit(limit).offset(offset)
+        select(RoutineCategory).order_by(RoutineCategory.name).limit(limit).offset(offset)
     )
     return [_to_read(c) for c in result.scalars().all()]
 
@@ -48,7 +48,7 @@ async def list_categories(
 async def get_category(
     category_id: int, db: AsyncSession = Depends(get_db), _: User = Depends(VIEW)
 ) -> CategoryRead:
-    result = await db.execute(select(TemplateCategory).where(TemplateCategory.id == category_id))
+    result = await db.execute(select(RoutineCategory).where(RoutineCategory.id == category_id))
     cat = result.scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404, detail="category not found")
@@ -61,10 +61,10 @@ async def get_category(
 async def create_category(
     body: CategoryCreate, db: AsyncSession = Depends(get_db), _: User = Depends(MANAGE)
 ) -> CategoryRead:
-    exists = await db.execute(select(TemplateCategory).where(TemplateCategory.name == body.name))
+    exists = await db.execute(select(RoutineCategory).where(RoutineCategory.name == body.name))
     if exists.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="category already exists")
-    cat = TemplateCategory(name=body.name, description=body.description, input_schema=body.input_schema)
+    cat = RoutineCategory(name=body.name, description=body.description, input_schema=body.input_schema)
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
@@ -78,7 +78,7 @@ async def update_category(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(MANAGE),
 ) -> CategoryRead:
-    result = await db.execute(select(TemplateCategory).where(TemplateCategory.id == category_id))
+    result = await db.execute(select(RoutineCategory).where(RoutineCategory.id == category_id))
     cat = result.scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404, detail="category not found")
@@ -99,9 +99,9 @@ async def delete_category(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(MANAGE),
 ) -> None:
-    result = await db.execute(select(TemplateCategory).where(TemplateCategory.id == category_id))
+    result = await db.execute(select(RoutineCategory).where(RoutineCategory.id == category_id))
     cat = result.scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404, detail="category not found")
-    cat.is_active = False  # soft delete: templates keep their history
+    cat.is_active = False  # soft delete: routines keep their history
     await db.commit()

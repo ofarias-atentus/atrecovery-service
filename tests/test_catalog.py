@@ -16,11 +16,11 @@ async def test_seed_catalog_present(client):
     assert {"python", "json"} <= cats
     cats_full = {c["name"]: c for c in (await client.get("/api/v1/categories", headers=h)).json()}
     assert cats_full["python"]["input_schema"]["required"] == ["source"]
-    templates = (await client.get("/api/v1/templates", headers=h)).json()
-    hello = next(t for t in templates if t["name"] == "hello.py")
+    routines = (await client.get("/api/v1/routines", headers=h)).json()
+    hello = next(t for t in routines if t["name"] == "hello.py")
     assert hello["category_name"] == "python"
     assert "input_schema" not in hello
-    assert isinstance(hello["content"], dict) and "hello from template" in hello["content"]["source"]
+    assert isinstance(hello["content"], dict) and "hello from routine" in hello["content"]["source"]
     types = {t["name"] for t in (await client.get("/api/v1/resource-types", headers=h)).json()}
     assert "mobile_device" in types
     mtypes = {t["name"] for t in (await client.get("/api/v1/metadata-types", headers=h)).json()}
@@ -54,13 +54,13 @@ async def test_seed_catalog_present(client):
 async def test_operator_can_read_but_not_write(client):
     h = await _operator(client)
     assert (await client.get("/api/v1/categories", headers=h)).status_code == 200
-    assert (await client.get("/api/v1/templates", headers=h)).status_code == 200
+    assert (await client.get("/api/v1/routines", headers=h)).status_code == 200
     assert (await client.get("/api/v1/resources", headers=h)).status_code == 200
     assert (await client.get("/api/v1/resource-types", headers=h)).status_code == 200
     assert (await client.get("/api/v1/metadata-types", headers=h)).status_code == 200
     assert (await client.post("/api/v1/categories", headers=h, json={"name": "x"})).status_code == 403
     assert (
-        await client.post("/api/v1/templates", headers=h, json={"name": "x", "category_id": 1, "content": {"source": "x"}})
+        await client.post("/api/v1/routines", headers=h, json={"name": "x", "category_id": 1, "content": {"source": "x"}})
     ).status_code == 403
     assert (
         await client.post("/api/v1/resources", headers=h, json={"name": "x", "identifier": "x"})
@@ -71,21 +71,21 @@ async def test_operator_can_read_but_not_write(client):
     assert (
         await client.post("/api/v1/resource-groups", headers=h, json={"name": "x"})
     ).status_code == 403
-    assert (await client.get("/api/v1/templates", headers=h)).status_code == 200
+    assert (await client.get("/api/v1/routines", headers=h)).status_code == 200
 
 
 async def test_unauthenticated_denied(client):
-    for path in ("/api/v1/categories", "/api/v1/templates", "/api/v1/resources", "/api/v1/resource-groups"):
+    for path in ("/api/v1/categories", "/api/v1/routines", "/api/v1/resources", "/api/v1/resource-groups"):
         assert (await client.get(path)).status_code == 401
 
 
-async def test_category_template_crud_and_json_validation(client):
+async def test_category_routine_crud_and_json_validation(client):
     h = await _admin(client)
     cat = (await client.post("/api/v1/categories", headers=h, json={"name": "yaml"})).json()
     assert (await client.post("/api/v1/categories", headers=h, json={"name": "yaml"})).status_code == 409
     tpl = (
         await client.post(
-            "/api/v1/templates",
+            "/api/v1/routines",
             headers=h,
             json={"name": "deploy.yaml", "category_id": cat["id"], "content": {"steps": []}},
         )
@@ -93,7 +93,7 @@ async def test_category_template_crud_and_json_validation(client):
     assert tpl["category_name"] == "yaml"
     assert tpl["content"] == {"steps": []}
     dup = await client.post(
-        "/api/v1/templates",
+        "/api/v1/routines",
         headers=h,
         json={"name": "deploy.yaml", "category_id": cat["id"], "content": {"steps": ["other"]}},
     )
@@ -101,7 +101,7 @@ async def test_category_template_crud_and_json_validation(client):
     # same name, new version is allowed
     v2 = (
         await client.post(
-            "/api/v1/templates",
+            "/api/v1/routines",
             headers=h,
             json={"name": "deploy.yaml", "version": 2, "category_id": cat["id"], "content": {"steps": ["v2"]}},
         )
@@ -116,33 +116,33 @@ async def test_category_template_crud_and_json_validation(client):
     ).json()
     assert bad_cat["input_schema"] == {"type": "object", "required": ["source"]}
     bad = await client.post(
-        "/api/v1/templates", headers=h,
+        "/api/v1/routines", headers=h,
         json={"name": "bad.py", "category_id": bad_cat["id"], "content": {"nope": 1}},
     )
     assert bad.status_code == 422
     good = await client.post(
-        "/api/v1/templates", headers=h,
+        "/api/v1/routines", headers=h,
         json={"name": "good.py", "category_id": bad_cat["id"], "content": {"source": "x"}},
     )
     assert good.status_code == 201
     assert "input_schema" not in good.json()
-    # per-template input_schema is rejected (schema lives on the category)
+    # per-routine input_schema is rejected (schema lives on the category)
     rejected = await client.post(
-        "/api/v1/templates", headers=h,
+        "/api/v1/routines", headers=h,
         json={"name": "nope.py", "category_id": bad_cat["id"],
               "content": {"source": "x"}, "input_schema": {"type": "object"}},
     )
     assert rejected.status_code == 422
     upd = (
-        await client.patch(f"/api/v1/templates/{tpl['id']}", headers=h, json={"content": {"steps": ["a"]}})
+        await client.patch(f"/api/v1/routines/{tpl['id']}", headers=h, json={"content": {"steps": ["a"]}})
     ).json()
     assert upd["content"] == {"steps": ["a"]}
     # soft delete: hidden from default list, visible with include_inactive
-    assert (await client.delete(f"/api/v1/templates/{tpl['id']}", headers=h)).status_code == 204
-    ids = [t["id"] for t in (await client.get("/api/v1/templates", headers=h)).json()]
+    assert (await client.delete(f"/api/v1/routines/{tpl['id']}", headers=h)).status_code == 204
+    ids = [t["id"] for t in (await client.get("/api/v1/routines", headers=h)).json()]
     assert tpl["id"] not in ids
     all_ids = [
-        t["id"] for t in (await client.get("/api/v1/templates?include_inactive=true", headers=h)).json()
+        t["id"] for t in (await client.get("/api/v1/routines?include_inactive=true", headers=h)).json()
     ]
     assert tpl["id"] in all_ids
 

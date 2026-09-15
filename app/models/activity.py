@@ -1,6 +1,6 @@
 """Activity log model (Stage 6): append-only audit trail.
 
-Every template fetch, usage relay, beacon ingest, grant change and group
+Every routine fetch, usage relay, beacon ingest, grant change and group
 change appends a row. No update/delete API exists; the admin UI (Stage 8)
 registers this table read-only. Powers Stage 7 stats via aggregation.
 """

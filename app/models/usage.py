@@ -1,4 +1,4 @@
-"""Usage-layer models (Stage 4): execution modes, template usages.
+"""Usage-layer models (Stage 4): execution modes, routine usages.
 
 Execution is out-of-scope and owned by external systems: rows only relay
 dispatch requests (direct / scheduler / voucher) and record state reported
@@ -29,14 +29,14 @@ class ExecutionMode(Base):
         return self.code
 
 
-class TemplateUsage(Base):
-    """One relayed use of a template against a resource (resource mandatory)."""
+class RoutineUsage(Base):
+    """One relayed use of a routine against a resource (resource mandatory)."""
 
-    __tablename__ = "template_usages"
+    __tablename__ = "routine_usages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), index=True
+    routine_id: Mapped[int] = mapped_column(
+        ForeignKey("routines.id", ondelete="CASCADE"), index=True
     )
     resource_id: Mapped[int] = mapped_column(
         ForeignKey("resources.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -59,4 +59,4 @@ class TemplateUsage(Base):
     )
 
     def __str__(self) -> str:
-        return f"template:{self.template_id} on resource:{self.resource_id} (#{self.id or '?'})"
+        return f"routine:{self.routine_id} on resource:{self.resource_id} (#{self.id or '?'})"

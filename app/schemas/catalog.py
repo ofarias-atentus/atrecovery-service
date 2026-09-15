@@ -1,7 +1,7 @@
 """Catalog schemas (Pydantic v2).
 
-The JSON structure of a template (``content``) is defined once per
-category via ``template_categories.input_schema`` — templates themselves
+The JSON structure of a routine (``content``) is defined once per
+category via ``routine_categories.input_schema`` — routines themselves
 carry no schema, they are only validated against their category.
 ``schema_hint`` is accepted as a deprecated alias of ``input_schema``.
 """
@@ -44,7 +44,7 @@ class CategoryRead(BaseModel):
     created_at: datetime | None = None
 
 
-class TemplateCreate(BaseModel):
+class RoutineCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=128, examples=["hello.py"])
@@ -53,12 +53,12 @@ class TemplateCreate(BaseModel):
     content: Any = Field(examples=[{"language": "python", "source": "print('hello')"}])
 
 
-class TemplateUpdate(BaseModel):
+class RoutineUpdate(BaseModel):
     content: Any | None = Field(default=None)
     is_active: bool | None = None
 
 
-class TemplateRead(BaseModel):
+class RoutineRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -73,8 +73,8 @@ class TemplateRead(BaseModel):
     updated_at: datetime | None = None
 
 
-class TemplateFetch(BaseModel):
-    """Payload returned by GET /templates/{id}/fetch (needs template:use + use grant)."""
+class RoutineFetch(BaseModel):
+    """Payload returned by GET /routines/{id}/fetch (needs routine:use + use grant)."""
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -2,7 +2,7 @@
 
 Expects a seeded server running: see README "Demo". Flow:
 login both users → operator fetch → voucher usage → processor beacon →
-usage status + beacons → denied case (ungranted template → 403) →
+usage status + beacons → denied case (ungranted routine → 403) →
 show activity logs. Exits non-zero on the first mismatch.
 """
 from __future__ import annotations
@@ -39,26 +39,26 @@ def main() -> int:
 
     admin, operator = login("admin", "admin123"), login("operator", "operator123")
 
-    templates = client.get("/api/v1/templates", headers=operator).json()
-    hello = next(t for t in templates if t["name"] == "hello.py")
-    check("operator lists granted templates", True, f"sees hello.py id={hello['id']}")
+    routines = client.get("/api/v1/routines", headers=operator).json()
+    hello = next(t for t in routines if t["name"] == "hello.py")
+    check("operator lists granted routines", True, f"sees hello.py id={hello['id']}")
 
-    fetch = client.get(f"/api/v1/templates/{hello['id']}/fetch", headers=operator)
+    fetch = client.get(f"/api/v1/routines/{hello['id']}/fetch", headers=operator)
     _content = fetch.json().get("content", "")
     _detail = _content["source"].strip() if isinstance(_content, dict) else str(_content).strip()
     check("operator fetch hello.py", fetch.status_code == 200, _detail)
 
-    # Resource-first: pick the Moto G6 phone, list its executable templates.
+    # Resource-first: pick the Moto G6 phone, list its executable routines.
     resources = client.get("/api/v1/resources", headers=operator).json()
     moto = next(r for r in resources if r["identifier"] == "ZY323S5GHW")
-    runnable = client.get(f"/api/v1/resources/{moto['id']}/templates", headers=operator).json()
-    check("resource lists its executable templates",
+    runnable = client.get(f"/api/v1/resources/{moto['id']}/routines", headers=operator).json()
+    check("resource lists its executable routines",
           any(t["name"] == "hello.py" for t in runnable),
           f"{len(runnable)} associated")
 
     usage = client.post(
         "/api/v1/usages", headers=operator,
-        json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "voucher"},
+        json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "voucher"},
     ).json()
     vid = usage.get("external_dispatch_id", "")
     check("voucher usage returns dispatch id", vid.startswith("V-"), vid)
@@ -92,16 +92,16 @@ def main() -> int:
           f"{retry.status_code}/{repost.status_code}")
 
     secret = client.post(
-        "/api/v1/templates", headers=admin,
+        "/api/v1/routines", headers=admin,
         json={"name": f"demo-secret-{os.getpid()}.py", "category_id": 1,
               "content": {"source": "x"}},
     ).json()
-    denied = client.get(f"/api/v1/templates/{secret['id']}/fetch", headers=operator)
+    denied = client.get(f"/api/v1/routines/{secret['id']}/fetch", headers=operator)
     check("ungranted fetch denied", denied.status_code == 403, f"got {denied.status_code}")
 
     logs = client.get("/api/v1/activity-logs", headers=admin).json()
     actions = {e["action"] for e in logs}
-    check("activity logs recorded", {"template.fetch", "template.use", "beacon.received"} <= actions,
+    check("activity logs recorded", {"routine.fetch", "routine.use", "beacon.received"} <= actions,
           f"{len(logs)} rows")
     for entry in logs[:5]:
         print(f"  log: {entry['action']} user={entry['user_id']} "

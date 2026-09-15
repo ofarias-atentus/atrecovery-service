@@ -1,6 +1,6 @@
 # Future Improvements
 
-Candidate follow-ups for the Template Management PoC, roughly ordered by
+Candidate follow-ups for the Routine Management PoC, roughly ordered by
 value/effort. Nothing here is required for the Stage 8 acceptance.
 
 ## Security & hardening
@@ -22,7 +22,7 @@ value/effort. Nothing here is required for the Stage 8 acceptance.
   real deployment needs versioned migrations before the next schema change.
 - **Move off SQLite** — Postgres + asyncpg for concurrency; WAL mode is already
   assumed but a single file won't scale past one replica.
-- **Soft-delete consistency** — templates/resources deactivate, but categories,
+- **Soft-delete consistency** — routines/resources deactivate, but categories,
   modes and definitions hard-delete. Pick one convention (and decide what
   historical rows must keep working).
 - **DB-level uniqueness for grants** — duplicates are rejected in code (409);

@@ -1,6 +1,6 @@
 """Auth dependencies: current user + RBAC permission gates (Stage 1).
 
-Object-level grants (template/resource) arrive in Stage 3 via services/rbac.py;
+Object-level grants (routine/resource) arrive in Stage 3 via services/rbac.py;
 this module only handles coarse permission codes + superuser bypass.
 Stage 5 adds processor-service token auth (X-Processor-Token, sha256).
 """

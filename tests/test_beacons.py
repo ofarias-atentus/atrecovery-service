@@ -24,7 +24,7 @@ async def _make_processor(client, admin_headers, name="runner-1", scopes=None):
 
 
 async def _hello_id(client, headers):
-    tpls = (await client.get("/api/v1/templates", headers=headers)).json()
+    tpls = (await client.get("/api/v1/routines", headers=headers)).json()
     return next(t for t in tpls if t["name"] == "hello.py")["id"]
 
 
@@ -59,7 +59,7 @@ async def test_beacon_report_drives_usage_lifecycle(client):
     usage = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id, "mode": "voucher"},
+            json={"routine_id": hello_id, "resource_id": moto_id, "mode": "voucher"},
         )
     ).json()
     partial = (
@@ -81,7 +81,7 @@ async def test_beacon_report_drives_usage_lifecycle(client):
     usage2 = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     await client.post(
@@ -102,7 +102,7 @@ async def test_beacon_idempotency_key_replays_and_counts(client):
     usage = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     assert usage["use_count"] == 1
@@ -156,7 +156,7 @@ async def test_beacon_auth_gates(client):
     usage = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     body = {"usage_id": usage["id"], "status": "ok"}
@@ -196,13 +196,13 @@ async def test_beacon_read_gates_and_usage_filter(client):
     mine = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     theirs = (
         await client.post(
             "/api/v1/usages", headers=admin,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     b_mine = (

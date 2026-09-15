@@ -11,7 +11,7 @@ async def _operator(client):
 
 
 async def _hello_id(client, headers):
-    tpls = (await client.get("/api/v1/templates", headers=headers)).json()
+    tpls = (await client.get("/api/v1/routines", headers=headers)).json()
     return next(t for t in tpls if t["name"] == "hello.py")["id"]
 
 
@@ -30,12 +30,12 @@ async def test_fetch_use_beacon_rows(client):
     opid = await _operator_id(client, admin)
     hello_id = await _hello_id(client, op)
 
-    assert (await client.get(f"/api/v1/templates/{hello_id}/fetch", headers=op)).status_code == 200
+    assert (await client.get(f"/api/v1/routines/{hello_id}/fetch", headers=op)).status_code == 200
     moto_id = await _moto_id(client, op)
     usage = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello_id, "resource_id": moto_id},
+            json={"routine_id": hello_id, "resource_id": moto_id},
         )
     ).json()
     proc = (
@@ -48,14 +48,14 @@ async def test_fetch_use_beacon_rows(client):
 
     logs = (await client.get("/api/v1/activity-logs", headers=admin)).json()
     by_action = {e["action"] for e in logs}
-    assert {"template.fetch", "template.use", "beacon.received"} <= by_action
+    assert {"routine.fetch", "routine.use", "beacon.received"} <= by_action
 
-    fetch = next(e for e in logs if e["action"] == "template.fetch")
-    assert fetch["user_id"] == opid and fetch["entity_type"] == "template"
+    fetch = next(e for e in logs if e["action"] == "routine.fetch")
+    assert fetch["user_id"] == opid and fetch["entity_type"] == "routine"
     assert fetch["entity_id"] == hello_id and fetch["ip"]
-    use = next(e for e in logs if e["action"] == "template.use")
+    use = next(e for e in logs if e["action"] == "routine.use")
     assert use["user_id"] == opid and use["entity_id"] == usage["id"]
-    assert use["meta"] == {"template_id": hello_id, "mode": "direct", "resource_id": moto_id}
+    assert use["meta"] == {"routine_id": hello_id, "mode": "direct", "resource_id": moto_id}
     beacon = next(e for e in logs if e["action"] == "beacon.received")
     assert beacon["user_id"] is None and beacon["entity_id"] == usage["id"]
     assert beacon["meta"]["processor_name"] == "r1" and beacon["meta"]["status"] == "ok"
@@ -66,18 +66,18 @@ async def test_grant_and_group_changes_logged(client):
     opid = await _operator_id(client, admin)
     tpl = (
         await client.post(
-            "/api/v1/templates", headers=admin,
+            "/api/v1/routines", headers=admin,
             json={"name": "audited.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
     g = (
         await client.post(
-            "/api/v1/grants/templates", headers=admin,
-            json={"template_id": tpl["id"], "principal_type": "user",
+            "/api/v1/grants/routines", headers=admin,
+            json={"routine_id": tpl["id"], "principal_type": "user",
                   "principal_id": opid, "can_view": True},
         )
     ).json()
-    await client.delete(f"/api/v1/grants/templates/{g['id']}", headers=admin)
+    await client.delete(f"/api/v1/grants/routines/{g['id']}", headers=admin)
     grp = (
         await client.post("/api/v1/resource-groups", headers=admin, json={"name": "audit-g"})
     ).json()
@@ -110,22 +110,22 @@ async def test_log_aggregation_most_used_and_last_fetch(client):
     hello_id = await _hello_id(client, op)
     other = (
         await client.post(
-            "/api/v1/templates", headers=admin,
+            "/api/v1/routines", headers=admin,
             json={"name": "other.py", "category_id": 1, "content": {"source": "y"}},
         )
     ).json()
     await client.post(
-        "/api/v1/grants/templates", headers=admin,
-        json={"template_id": other["id"], "principal_type": "user",
+        "/api/v1/grants/routines", headers=admin,
+        json={"routine_id": other["id"], "principal_type": "user",
               "principal_id": opid, "can_view": True, "can_use": True},
     )
-    await client.get(f"/api/v1/templates/{hello_id}/fetch", headers=op)
-    await client.get(f"/api/v1/templates/{hello_id}/fetch", headers=op)
-    await client.get(f"/api/v1/templates/{other['id']}/fetch", headers=op)
+    await client.get(f"/api/v1/routines/{hello_id}/fetch", headers=op)
+    await client.get(f"/api/v1/routines/{hello_id}/fetch", headers=op)
+    await client.get(f"/api/v1/routines/{other['id']}/fetch", headers=op)
 
     fetches = (
         await client.get(
-            f"/api/v1/activity-logs?action=template.fetch&user_id={opid}", headers=admin
+            f"/api/v1/activity-logs?action=routine.fetch&user_id={opid}", headers=admin
         )
     ).json()
     assert len(fetches) == 3

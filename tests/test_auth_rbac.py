@@ -35,7 +35,7 @@ async def test_me_returns_roles_and_permissions(client):
     me = (await client.get("/api/v1/auth/me", headers=auth_headers(tokens["access_token"]))).json()
     assert me["username"] == "operator"
     assert "operator" in me["roles"]
-    assert "template:use" in me["permissions"]
+    assert "routine:use" in me["permissions"]
     assert "users:manage" not in me["permissions"]
 
 
@@ -85,7 +85,7 @@ async def test_admin_create_assign_login_new_user(client):
     assert "operator" in r.json()["roles"]
     tokens = await login(client, "op2", "op212345")
     me = (await client.get("/api/v1/auth/me", headers=auth_headers(tokens["access_token"]))).json()
-    assert "template:use" in me["permissions"]
+    assert "routine:use" in me["permissions"]
 
 
 async def test_provider_callback_stub(client):

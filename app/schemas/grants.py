@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, model_validator
 Principal = Literal["user", "role", "group"]
 
 
-class TemplateGrantCreate(BaseModel):
-    template_id: int
+class RoutineGrantCreate(BaseModel):
+    routine_id: int
     principal_type: Principal
     principal_id: int
     can_view: bool = True
@@ -20,7 +20,7 @@ class TemplateGrantCreate(BaseModel):
         return self
 
 
-class TemplateGrantRead(TemplateGrantCreate):
+class RoutineGrantRead(RoutineGrantCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

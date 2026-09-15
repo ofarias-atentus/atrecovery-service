@@ -1,7 +1,7 @@
 [project]
 name = "recovery-poc-three"
 version = "0.1.0"
-description = "FastAPI Template Management PoC (retrieve/maintain/categorize, execution out-of-scope)"
+description = "FastAPI Routine Management PoC (retrieve/maintain/categorize, execution out-of-scope)"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",

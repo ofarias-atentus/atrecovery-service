@@ -4,7 +4,7 @@ POST requires the ``beacon:report`` scope and moves the usage lifecycle
 (ok → done, error → failed, partial → running). Cron-driven executors may
 report repeatedly: repeating a seen (usage_id, idem_key) replays the stored
 row (200) instead of recording a duplicate (201). Each accepted beacon bumps
-the usage ``use_count``. GET needs ``template:view`` and is scoped to the
+the usage ``use_count``. GET needs ``routine:view`` and is scoped to the
 caller's own usages unless admin.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -15,12 +15,12 @@ from app.core.deps import get_processor, get_user_permissions, require_permissio
 from app.db.session import get_db
 from app.models.beacons import ExecutionResult, ProcessorService
 from app.models.identity import User
-from app.models.usage import TemplateUsage
+from app.models.usage import RoutineUsage
 from app.schemas.beacons import BEACON_TO_USAGE, BeaconCreate, BeaconRead
 from app.services.activity import BEACON_RECEIVED, client_ip, log_activity
 
 router = APIRouter()
-VIEW = require_permission("template:view")
+VIEW = require_permission("routine:view")
 
 
 async def _see_all(db: AsyncSession, user: User) -> bool:
@@ -43,7 +43,7 @@ async def post_beacon(
             status_code=status.HTTP_403_FORBIDDEN, detail="processor lacks beacon:report scope"
         )
     usage = (
-        await db.execute(select(TemplateUsage).where(TemplateUsage.id == body.usage_id))
+        await db.execute(select(RoutineUsage).where(RoutineUsage.id == body.usage_id))
     ).scalar_one_or_none()
     if usage is None:
         raise HTTPException(status_code=404, detail="usage not found")
@@ -90,7 +90,7 @@ async def list_beacons(
     if usage_id is not None:
         stmt = stmt.where(ExecutionResult.usage_id == usage_id)
     if not await _see_all(db, user):
-        own = select(TemplateUsage.id).where(TemplateUsage.requested_by == user.id)
+        own = select(RoutineUsage.id).where(RoutineUsage.requested_by == user.id)
         stmt = stmt.where(ExecutionResult.usage_id.in_(own))
     result = await db.execute(stmt.limit(limit).offset(offset))
     return list(result.scalars().all())
@@ -110,7 +110,7 @@ async def get_beacon(
     if not await _see_all(db, user):
         owner = (
             await db.execute(
-                select(TemplateUsage.requested_by).where(TemplateUsage.id == b.usage_id)
+                select(RoutineUsage.requested_by).where(RoutineUsage.id == b.usage_id)
             )
         ).scalar_one_or_none()
         if owner != user.id:

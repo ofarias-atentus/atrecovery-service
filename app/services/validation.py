@@ -1,7 +1,7 @@
-"""JSON structure validation (templates + resources + metadata).
+"""JSON structure validation (routines + resources + metadata).
 
-- Templates: ``content`` JSON validated against the owning
-  ``template_categories.input_schema``.
+- Routines: ``content`` JSON validated against the owning
+  ``routine_categories.input_schema``.
 - Resources: ``data`` JSON validated against the owning
   ``resource_types.schema``.
 - Resource metadata: ``data`` JSON validated against the owning

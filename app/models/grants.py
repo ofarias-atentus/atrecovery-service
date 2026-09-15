@@ -1,7 +1,7 @@
 """Object-level grant models (Stage 3).
 
 Complements coarse RBAC permission codes: a non-superuser needs BOTH the
-relevant permission code (e.g. ``template:view``) AND a grant row.
+relevant permission code (e.g. ``routine:view``) AND a grant row.
 Grant principals are ``user`` | ``role`` | ``group`` (resource groups).
 Group principals resolve through ``GroupAssignment`` (direct user assign
 or via one of the user's roles). Deny by default.
@@ -16,7 +16,7 @@ from app.db.base import Base
 PrincipalType = str  # "user" | "role" | "group"
 
 
-def _flags(g: TemplateGrant | ResourceGrant) -> str:
+def _flags(g: RoutineGrant | ResourceGrant) -> str:
     """Short 'view+use' / 'view' / 'use' / 'none' summary for admin display."""
     if g.can_view and g.can_use:
         return "view+use"
@@ -27,14 +27,14 @@ def _flags(g: TemplateGrant | ResourceGrant) -> str:
     return "none"
 
 
-class TemplateGrant(Base):
-    """View/use rights on one template for one principal."""
+class RoutineGrant(Base):
+    """View/use rights on one routine for one principal."""
 
-    __tablename__ = "template_grants"
+    __tablename__ = "routine_grants"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), index=True
+    routine_id: Mapped[int] = mapped_column(
+        ForeignKey("routines.id", ondelete="CASCADE"), index=True
     )
     principal_type: Mapped[str] = mapped_column(String(10), index=True)
     principal_id: Mapped[int] = mapped_column(Integer, index=True)
@@ -42,7 +42,7 @@ class TemplateGrant(Base):
     can_use: Mapped[bool] = mapped_column(Boolean, default=False)
 
     def __str__(self) -> str:
-        return f"template:{self.template_id} → {self.principal_type}:{self.principal_id} ({_flags(self)})"
+        return f"routine:{self.routine_id} → {self.principal_type}:{self.principal_id} ({_flags(self)})"
 
 
 class ResourceGrant(Base):

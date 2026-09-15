@@ -2,16 +2,16 @@
 
 Resources are ``id / name / identifier / type + data JSON``. ``data`` is
 validated against the owning ``ResourceType.schema`` when present (same
-mechanism as template content and metadata validation).
+mechanism as routine content and metadata validation).
 
 Metadata lives separately: each ``ResourceMetadata`` entry has its own
 ``MetadataType`` (JSON schema) and ``data`` JSON; a resource can have
 multiple metadata entries.
 
-Templates are associated per resource (``resource_templates`` join rows):
-a template can only be executed against an associated resource (closed
+Routines are associated per resource (``resource_routines`` join rows):
+a routine can only be executed against an associated resource (closed
 world — a resource with no associations runs nothing). Discovery via
-``GET /{id}/templates`` lists associated templates the caller holds a
+``GET /{id}/routines`` lists associated routines the caller holds a
 use-grant on; execution itself stays ``POST /usages`` with a mandatory
 ``resource_id``.
 
@@ -24,16 +24,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_permission
 from app.db.session import get_db
-from app.models.catalog import Template
+from app.models.catalog import Routine
 from app.models.identity import User
 from app.models.resources import (
     MetadataType,
     Resource,
     ResourceMetadata,
-    ResourceTemplate,
+    ResourceRoutine,
     ResourceType,
 )
-from app.schemas.catalog import TemplateRead
+from app.schemas.catalog import RoutineRead
 from app.schemas.resources import (
     ResourceCreate,
     ResourceMetadataCreate,
@@ -41,10 +41,10 @@ from app.schemas.resources import (
     ResourceMetadataUpdate,
     ResourceRead,
     ResourceUpdate,
-    TemplateAttach,
+    RoutineAttach,
 )
 from app.services.rbac import (
-    granted_template_ids,
+    granted_routine_ids,
     require_resource_access,
     resource_access_map,
 )
@@ -306,8 +306,8 @@ async def detach_metadata(
     await db.commit()
 
 
-def _template_to_read(t: Template) -> TemplateRead:
-    return TemplateRead(
+def _routine_to_read(t: Routine) -> RoutineRead:
+    return RoutineRead(
         id=t.id,
         name=t.name,
         version=t.version,
@@ -322,21 +322,21 @@ def _template_to_read(t: Template) -> TemplateRead:
 
 
 @router.get(
-    "/{resource_id}/templates",
-    response_model=list[TemplateRead],
-    summary="List templates associated with this resource that the caller may use",
+    "/{resource_id}/routines",
+    response_model=list[RoutineRead],
+    summary="List routines associated with this resource that the caller may use",
 )
-async def list_resource_templates(
+async def list_resource_routines(
     r: Resource = Depends(VIEW_GRANT),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-) -> list[TemplateRead]:
-    """Resource-first discovery: associated templates ∩ caller's use-grants."""
+) -> list[RoutineRead]:
+    """Resource-first discovery: associated routines ∩ caller's use-grants."""
     associated = set(
         (
             await db.execute(
-                select(ResourceTemplate.template_id).where(
-                    ResourceTemplate.resource_id == r.id
+                select(ResourceRoutine.routine_id).where(
+                    ResourceRoutine.resource_id == r.id
                 )
             )
         )
@@ -345,7 +345,7 @@ async def list_resource_templates(
     )
     if not associated:
         return []
-    if (usable := await granted_template_ids(db, user, "use")) is None:
+    if (usable := await granted_routine_ids(db, user, "use")) is None:
         usable = associated  # superuser: every association is executable
     else:
         usable = associated & usable
@@ -353,63 +353,63 @@ async def list_resource_templates(
         return []
     rows = (
         await db.execute(
-            select(Template)
-            .where(Template.id.in_(usable), Template.is_active.is_(True))
-            .order_by(Template.name, Template.version)
+            select(Routine)
+            .where(Routine.id.in_(usable), Routine.is_active.is_(True))
+            .order_by(Routine.name, Routine.version)
         )
     ).scalars().all()
-    return [_template_to_read(t) for t in rows]
+    return [_routine_to_read(t) for t in rows]
 
 
 @router.post(
-    "/{resource_id}/templates",
-    response_model=TemplateRead,
+    "/{resource_id}/routines",
+    response_model=RoutineRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Associate a template with a resource",
+    summary="Associate a routine with a resource",
 )
-async def attach_template(
+async def attach_routine(
     resource_id: int,
-    body: TemplateAttach,
+    body: RoutineAttach,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(MANAGE),
-) -> TemplateRead:
+) -> RoutineRead:
     r = await _get_or_404(db, resource_id)
     t = (
-        await db.execute(select(Template).where(Template.id == body.template_id))
+        await db.execute(select(Routine).where(Routine.id == body.routine_id))
     ).scalar_one_or_none()
     if t is None:
-        raise HTTPException(status_code=404, detail="template not found")
+        raise HTTPException(status_code=404, detail="routine not found")
     dup = (
         await db.execute(
-            select(ResourceTemplate).where(
-                ResourceTemplate.resource_id == r.id,
-                ResourceTemplate.template_id == t.id,
+            select(ResourceRoutine).where(
+                ResourceRoutine.resource_id == r.id,
+                ResourceRoutine.routine_id == t.id,
             )
         )
     ).scalar_one_or_none()
     if dup is not None:
-        raise HTTPException(status_code=409, detail="template already associated")
-    db.add(ResourceTemplate(resource_id=r.id, template_id=t.id))
+        raise HTTPException(status_code=409, detail="routine already associated")
+    db.add(ResourceRoutine(resource_id=r.id, routine_id=t.id))
     await db.commit()
-    return _template_to_read(t)
+    return _routine_to_read(t)
 
 
 @router.delete(
-    "/{resource_id}/templates/{template_id}",
+    "/{resource_id}/routines/{routine_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Dissociate a template from a resource",
+    summary="Dissociate a routine from a resource",
 )
-async def detach_template(
+async def detach_routine(
     resource_id: int,
-    template_id: int,
+    routine_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(MANAGE),
 ) -> None:
     link = (
         await db.execute(
-            select(ResourceTemplate).where(
-                ResourceTemplate.resource_id == resource_id,
-                ResourceTemplate.template_id == template_id,
+            select(ResourceRoutine).where(
+                ResourceRoutine.resource_id == resource_id,
+                ResourceRoutine.routine_id == routine_id,
             )
         )
     ).scalar_one_or_none()

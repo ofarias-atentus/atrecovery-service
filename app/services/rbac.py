@@ -3,8 +3,8 @@
 Order per ``plan.md``: ``is_superuser → role permission code → direct grant
 → group assignment + group grant``. Deny by default.
 
-A non-superuser needs BOTH the coarse permission code (``template:view`` for
-view, ``template:use`` for use; same for resources) AND a matching grant row.
+A non-superuser needs BOTH the coarse permission code (``routine:view`` for
+view, ``routine:use`` for use; same for resources) AND a matching grant row.
 Grants address principals ``user`` | ``role`` | ``group``; group principals
 resolve through ``GroupAssignment`` rows reaching the user directly or via one
 of the user's roles. A grant on a group covers its member resources.
@@ -19,14 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_user_permissions
 from app.db.session import get_db
-from app.models.catalog import Template
-from app.models.grants import ResourceGrant, TemplateGrant
+from app.models.catalog import Routine
+from app.models.grants import ResourceGrant, RoutineGrant
 from app.models.identity import User, UserRole
 from app.models.resources import GroupAssignment, Resource, ResourceGroupMember
 
 Action = Literal["view", "use"]
 
-TEMPLATE_CODES: dict[Action, str] = {"view": "template:view", "use": "template:use"}
+ROUTINE_CODES: dict[Action, str] = {"view": "routine:view", "use": "routine:use"}
 RESOURCE_CODES: dict[Action, str] = {"view": "resource:view", "use": "resource:use"}
 
 
@@ -62,12 +62,12 @@ def _principal_match(
     return False
 
 
-async def _template_flags(db: AsyncSession, user: User, template_id: int) -> tuple[bool, bool]:
+async def _routine_flags(db: AsyncSession, user: User, routine_id: int) -> tuple[bool, bool]:
     """Combined (can_view, can_use) from all grants addressing the user."""
     roles = await user_role_ids(db, user)
     groups = await user_group_ids(db, user)
     result = await db.execute(
-        select(TemplateGrant).where(TemplateGrant.template_id == template_id)
+        select(RoutineGrant).where(RoutineGrant.routine_id == routine_id)
     )
     view = use = False
     for g in result.scalars().all():
@@ -77,31 +77,31 @@ async def _template_flags(db: AsyncSession, user: User, template_id: int) -> tup
     return view, use
 
 
-async def has_template_access(db: AsyncSession, user: User, template_id: int, action: Action) -> bool:
+async def has_routine_access(db: AsyncSession, user: User, routine_id: int, action: Action) -> bool:
     if user.is_superuser:
         return True
-    if TEMPLATE_CODES[action] not in await get_user_permissions(db, user):
+    if ROUTINE_CODES[action] not in await get_user_permissions(db, user):
         return False
-    view, use = await _template_flags(db, user, template_id)
+    view, use = await _routine_flags(db, user, routine_id)
     return (view or use) if action == "view" else use
 
 
-async def granted_template_ids(db: AsyncSession, user: User, action: Action) -> set[int] | None:
-    """Template ids visible to the user, or None for superuser (all)."""
+async def granted_routine_ids(db: AsyncSession, user: User, action: Action) -> set[int] | None:
+    """Routine ids visible to the user, or None for superuser (all)."""
     if user.is_superuser:
         return None
-    if TEMPLATE_CODES[action] not in await get_user_permissions(db, user):
+    if ROUTINE_CODES[action] not in await get_user_permissions(db, user):
         return set()
     roles = await user_role_ids(db, user)
     groups = await user_group_ids(db, user)
-    result = await db.execute(select(TemplateGrant))
+    result = await db.execute(select(RoutineGrant))
     flag = "can_view" if action == "view" else "can_use"
     ids: set[int] = set()
     for g in result.scalars().all():
         # A use grant implies view (fetch returns JSON content).
         allowed = getattr(g, flag) or (action == "view" and g.can_use)
         if allowed and _principal_match(g.principal_type, g.principal_id, user, roles, groups):
-            ids.add(g.template_id)
+            ids.add(g.routine_id)
     return ids
 
 
@@ -147,20 +147,20 @@ async def has_resource_access(db: AsyncSession, user: User, resource_id: int, ac
     return True if ids is None else resource_id in ids
 
 
-def require_template_access(action: Action):
-    """Dependency factory: 404 if missing, 403 if no grant; returns the Template."""
+def require_routine_access(action: Action):
+    """Dependency factory: 404 if missing, 403 if no grant; returns the Routine."""
 
     async def checker(
-        template_id: int,
+        routine_id: int,
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
-    ) -> Template:
-        result = await db.execute(select(Template).where(Template.id == template_id))
+    ) -> Routine:
+        result = await db.execute(select(Routine).where(Routine.id == routine_id))
         t = result.scalar_one_or_none()
         if t is None:
-            raise HTTPException(status_code=404, detail="template not found")
-        if not await has_template_access(db, user, t.id, action):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="no grant for this template")
+            raise HTTPException(status_code=404, detail="routine not found")
+        if not await has_routine_access(db, user, t.id, action):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="no grant for this routine")
         return t
 
     return checker

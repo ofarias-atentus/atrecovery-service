@@ -1,4 +1,4 @@
-"""Execution modes registry (read: template:view, write: admin:manage)."""
+"""Execution modes registry (read: routine:view, write: admin:manage)."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from app.models.usage import ExecutionMode
 from app.schemas.usage import ExecutionModeCreate, ExecutionModeRead
 
 router = APIRouter()
-VIEW = require_permission("template:view")
+VIEW = require_permission("routine:view")
 ADMIN = require_admin()
 
 

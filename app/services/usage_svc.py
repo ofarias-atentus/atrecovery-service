@@ -11,12 +11,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.catalog import Template
+from app.models.catalog import Routine
 from app.models.identity import User
-from app.models.resources import Resource, ResourceTemplate
-from app.models.usage import ExecutionMode, TemplateUsage
+from app.models.resources import Resource, ResourceRoutine
+from app.models.usage import ExecutionMode, RoutineUsage
 from app.schemas.usage import UsageCreate
-from app.services.rbac import has_resource_access, has_template_access
+from app.services.rbac import has_resource_access, has_routine_access
 
 
 def _utcnow_naive() -> datetime:
@@ -66,23 +66,23 @@ async def get_mode_or_422(db: AsyncSession, code: str) -> ExecutionMode:
     return mode
 
 
-async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> TemplateUsage:
+async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> RoutineUsage:
     """Validate grants + resource association, then record one usage.
 
-    Templates never execute standalone: every usage names a resource, and the
-    (template, resource) pair must be associated (closed world — a resource
+    Routines never execute standalone: every usage names a resource, and the
+    (routine, resource) pair must be associated (closed world — a resource
     with no associations runs nothing). Enforced for everyone, superusers
     included, since association is a compatibility fact, not a permission.
     """
     mode = await get_mode_or_422(db, body.mode)
     t = (
-        await db.execute(select(Template).where(Template.id == body.template_id))
+        await db.execute(select(Routine).where(Routine.id == body.routine_id))
     ).scalar_one_or_none()
     if t is None or not t.is_active:
-        raise HTTPException(status_code=404, detail="template not found")
-    if not await has_template_access(db, user, t.id, "use"):
+        raise HTTPException(status_code=404, detail="routine not found")
+    if not await has_routine_access(db, user, t.id, "use"):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="no use grant for this template"
+            status_code=status.HTTP_403_FORBIDDEN, detail="no use grant for this routine"
         )
     r = (
         await db.execute(select(Resource).where(Resource.id == body.resource_id))
@@ -95,16 +95,16 @@ async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> Templ
         )
     link = (
         await db.execute(
-            select(ResourceTemplate).where(
-                ResourceTemplate.resource_id == r.id,
-                ResourceTemplate.template_id == t.id,
+            select(ResourceRoutine).where(
+                ResourceRoutine.resource_id == r.id,
+                ResourceRoutine.routine_id == t.id,
             )
         )
     ).scalar_one_or_none()
     if link is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="template not associated with this resource",
+            detail="routine not associated with this resource",
         )
     if body.cron is not None:
         validate_cron(body.cron)
@@ -118,8 +118,8 @@ async def create_usage(db: AsyncSession, user: User, body: UsageCreate) -> Templ
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="cron only applies to scheduler mode",
         )
-    usage = TemplateUsage(
-        template_id=t.id,
+    usage = RoutineUsage(
+        routine_id=t.id,
         resource_id=body.resource_id,
         requested_by=user.id,
         mode_id=mode.id,

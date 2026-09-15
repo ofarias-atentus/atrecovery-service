@@ -11,7 +11,7 @@ async def _operator(client):
 
 
 async def _hello(client, headers):
-    tpls = (await client.get("/api/v1/templates", headers=headers)).json()
+    tpls = (await client.get("/api/v1/routines", headers=headers)).json()
     return next(t for t in tpls if t["name"] == "hello.py")
 
 
@@ -25,11 +25,11 @@ async def _operator_id(client, admin_headers):
     return next(u["id"] for u in users if u["username"] == "operator")
 
 
-async def _link(client, admin_headers, resource_id, template_id):
-    """Associate template↔resource (admin) + assert 201; helper for usage tests."""
+async def _link(client, admin_headers, resource_id, routine_id):
+    """Associate routine↔resource (admin) + assert 201; helper for usage tests."""
     r = await client.post(
-        f"/api/v1/resources/{resource_id}/templates", headers=admin_headers,
-        json={"template_id": template_id},
+        f"/api/v1/resources/{resource_id}/routines", headers=admin_headers,
+        json={"routine_id": routine_id},
     )
     assert r.status_code == 201, r.text
 
@@ -64,7 +64,7 @@ async def test_direct_usage_roundtrip(client):
     u = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "direct"},
+            json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "direct"},
         )
     ).json()
     assert u["status"] == "dispatched" and u["use_count"] == 1
@@ -81,14 +81,14 @@ async def test_scheduler_requires_valid_cron(client):
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler"},
+            json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler"},
         )
     ).status_code == 422
     # malformed cron → 422
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"],
+            json={"routine_id": hello["id"], "resource_id": moto["id"],
                   "mode": "scheduler", "cron": "not a cron"},
         )
     ).status_code == 422
@@ -96,7 +96,7 @@ async def test_scheduler_requires_valid_cron(client):
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"],
+            json={"routine_id": hello["id"], "resource_id": moto["id"],
                   "mode": "direct", "cron": "*/15 * * * *"},
         )
     ).status_code == 422
@@ -104,7 +104,7 @@ async def test_scheduler_requires_valid_cron(client):
         await client.post(
             "/api/v1/usages",
             headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler",
+            json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "scheduler",
                   "cron": "*/15 * * * *", "payload": {"name": "ops"}},
         )
     ).json()
@@ -123,7 +123,7 @@ async def test_voucher_flow_returns_dispatch_id(client):
     u = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "voucher"},
+            json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "voucher"},
         )
     ).json()
     assert u["status"] == "pending"
@@ -137,20 +137,20 @@ async def test_usage_grant_and_input_gates(client):
     hello, moto = await _hello(client, op), await _moto(client, op)
     tpl = (
         await client.post(
-            "/api/v1/templates", headers=admin,
+            "/api/v1/routines", headers=admin,
             json={"name": "nog.py", "category_id": 1, "content": {"source": "x"}},
         )
     ).json()
-    # ungranted template (grant check precedes association): 403
+    # ungranted routine (grant check precedes association): 403
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": tpl["id"], "resource_id": moto["id"]},
+            json={"routine_id": tpl["id"], "resource_id": moto["id"]},
         )
     ).status_code == 403
-    # missing resource entirely: 422, templates never execute standalone
+    # missing resource entirely: 422, routines never execute standalone
     assert (
-        await client.post("/api/v1/usages", headers=op, json={"template_id": hello["id"]})
+        await client.post("/api/v1/usages", headers=op, json={"routine_id": hello["id"]})
     ).status_code == 422
     res = (
         await client.post(
@@ -160,25 +160,25 @@ async def test_usage_grant_and_input_gates(client):
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": res["id"]},
+            json={"routine_id": hello["id"], "resource_id": res["id"]},
         )
     ).status_code == 403
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"], "mode": "nope"},
+            json={"routine_id": hello["id"], "resource_id": moto["id"], "mode": "nope"},
         )
     ).status_code == 422
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": 9999, "resource_id": moto["id"]},
+            json={"routine_id": 9999, "resource_id": moto["id"]},
         )
     ).status_code == 404
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": 9999},
+            json={"routine_id": hello["id"], "resource_id": 9999},
         )
     ).status_code == 404
     assert (await client.get("/api/v1/usages/9999", headers=op)).status_code == 404
@@ -190,13 +190,13 @@ async def test_usage_visibility_scoped_to_owner(client):
     mine = (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": moto["id"]},
+            json={"routine_id": hello["id"], "resource_id": moto["id"]},
         )
     ).json()
     theirs = (
         await client.post(
             "/api/v1/usages", headers=admin,
-            json={"template_id": hello["id"], "resource_id": moto["id"]},
+            json={"routine_id": hello["id"], "resource_id": moto["id"]},
         )
     ).json()
     listed = (await client.get("/api/v1/usages", headers=op)).json()
@@ -208,37 +208,37 @@ async def test_usage_visibility_scoped_to_owner(client):
     assert (await client.get("/api/v1/usages")).status_code == 401
 
 
-async def test_resource_template_association_discovery_and_enforcement(client):
-    """Resource-first flow: curated per-resource template lists, strictly enforced."""
+async def test_resource_routine_association_discovery_and_enforcement(client):
+    """Resource-first flow: curated per-resource routine lists, strictly enforced."""
     admin, op = await _admin(client), await _operator(client)
     hello, moto = await _hello(client, op), await _moto(client, op)
     opid = await _operator_id(client, admin)
 
     # seed: Moto G6 ↔ hello.py associated, visible to the operator
-    mine = (await client.get(f"/api/v1/resources/{moto['id']}/templates", headers=op)).json()
+    mine = (await client.get(f"/api/v1/resources/{moto['id']}/routines", headers=op)).json()
     assert [t["name"] for t in mine] == ["hello.py"]
 
     # association CRUD is admin-only
     assert (
         await client.post(
-            f"/api/v1/resources/{moto['id']}/templates", headers=op,
-            json={"template_id": hello["id"]},
+            f"/api/v1/resources/{moto['id']}/routines", headers=op,
+            json={"routine_id": hello["id"]},
         )
     ).status_code == 403
     assert (
         await client.post(
-            f"/api/v1/resources/{moto['id']}/templates", headers=admin,
-            json={"template_id": hello["id"]},
+            f"/api/v1/resources/{moto['id']}/routines", headers=admin,
+            json={"routine_id": hello["id"]},
         )
     ).status_code == 409  # seed pair already associated
     assert (
         await client.post(
-            f"/api/v1/resources/{moto['id']}/templates", headers=admin,
-            json={"template_id": 9999},
+            f"/api/v1/resources/{moto['id']}/routines", headers=admin,
+            json={"routine_id": 9999},
         )
     ).status_code == 404
     assert (
-        await client.delete(f"/api/v1/resources/{moto['id']}/templates/9999", headers=admin)
+        await client.delete(f"/api/v1/resources/{moto['id']}/routines/9999", headers=admin)
     ).status_code == 404
 
     # a resource with no associations runs nothing (closed world)
@@ -248,44 +248,44 @@ async def test_resource_template_association_discovery_and_enforcement(client):
         )
     ).json()
     await _grant_resource(client, admin, bare["id"], "user", opid)
-    assert (await client.get(f"/api/v1/resources/{bare['id']}/templates", headers=op)).json() == []
+    assert (await client.get(f"/api/v1/resources/{bare['id']}/routines", headers=op)).json() == []
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": hello["id"], "resource_id": bare["id"]},
+            json={"routine_id": hello["id"], "resource_id": bare["id"]},
         )
     ).status_code == 422
 
-    # associated-but-ungranted templates stay hidden from discovery,
+    # associated-but-ungranted routines stay hidden from discovery,
     # yet the pair is enforced at execution for everyone (incl. superusers)
     other = (
         await client.post(
-            "/api/v1/templates", headers=admin,
+            "/api/v1/routines", headers=admin,
             json={"name": "other.py", "category_id": 1, "content": {"source": "y"}},
         )
     ).json()
     await _link(client, admin, moto["id"], other["id"])
-    assert [t["name"] for t in (await client.get(f"/api/v1/resources/{moto['id']}/templates", headers=op)).json()] == ["hello.py"]
+    assert [t["name"] for t in (await client.get(f"/api/v1/resources/{moto['id']}/routines", headers=op)).json()] == ["hello.py"]
     assert (
         await client.post(
             "/api/v1/usages", headers=admin,
-            json={"template_id": other["id"], "resource_id": moto["id"]},
+            json={"routine_id": other["id"], "resource_id": moto["id"]},
         )
     ).status_code == 201  # admin bypasses grants, not associations
     assert (
         await client.post(
             "/api/v1/usages", headers=op,
-            json={"template_id": other["id"], "resource_id": moto["id"]},
+            json={"routine_id": other["id"], "resource_id": moto["id"]},
         )
     ).status_code == 403  # grant check precedes association
 
     # dissociate → discovery empties and execution flips to 422
     assert (
-        await client.delete(f"/api/v1/resources/{moto['id']}/templates/{other['id']}", headers=admin)
+        await client.delete(f"/api/v1/resources/{moto['id']}/routines/{other['id']}", headers=admin)
     ).status_code == 204
     assert (
         await client.post(
             "/api/v1/usages", headers=admin,
-            json={"template_id": other["id"], "resource_id": moto["id"]},
+            json={"routine_id": other["id"], "resource_id": moto["id"]},
         )
     ).status_code == 422

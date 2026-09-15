@@ -36,8 +36,8 @@ from app.core.security import (
 )
 from app.models.activity import ActivityLog
 from app.models.beacons import ExecutionResult, ProcessorService
-from app.models.catalog import Template, TemplateCategory
-from app.models.grants import ResourceGrant, TemplateGrant
+from app.models.catalog import Routine, RoutineCategory
+from app.models.grants import ResourceGrant, RoutineGrant
 from app.models.identity import (
     AuthIdentity,
     Permission,
@@ -53,10 +53,10 @@ from app.models.resources import (
     ResourceGroup,
     ResourceGroupMember,
     ResourceMetadata,
-    ResourceTemplate,
+    ResourceRoutine,
     ResourceType,
 )
-from app.models.usage import ExecutionMode, TemplateUsage
+from app.models.usage import ExecutionMode, RoutineUsage
 
 
 def _sync_session_factory() -> sessionmaker:
@@ -162,8 +162,8 @@ def _fmt_user(m, _a) -> str:
     return _display_label(User, m.user_id, "user")
 
 
-def _fmt_template(m, _a) -> str:
-    return _display_label(Template, m.template_id, "template")
+def _fmt_routine(m, _a) -> str:
+    return _display_label(Routine, m.routine_id, "routine")
 
 
 def _fmt_resource(m, _a) -> str:
@@ -175,7 +175,7 @@ def _fmt_group(m, _a) -> str:
 
 
 def _fmt_category(m, _a) -> str:
-    return _display_label(TemplateCategory, m.category_id, "category")
+    return _display_label(RoutineCategory, m.category_id, "category")
 
 
 def _fmt_mode(m, _a) -> str:
@@ -203,18 +203,18 @@ def _fmt_principal(m, _a) -> str:
 def _fmt_usage(m, _a) -> str:
     """``hello.py on ZY323S5GHW (#5)`` instead of a bare usage id."""
     with _sync_session_factory()() as session:
-        u = session.get(TemplateUsage, m.usage_id)
+        u = session.get(RoutineUsage, m.usage_id)
         if u is None:
             return f"usage:{m.usage_id}"
-        t = session.get(Template, u.template_id)
+        t = session.get(Routine, u.routine_id)
         r = session.get(Resource, u.resource_id)
-        t_label = t.name if t is not None else f"template:{u.template_id}"
+        t_label = t.name if t is not None else f"routine:{u.routine_id}"
         r_label = r.identifier if r is not None else f"resource:{u.resource_id}"
         return f"{t_label} on {r_label} (#{u.id})"
 
 
 _ENTITY_MODELS = {
-    "template": Template,
+    "routine": Routine,
     "resource": Resource,
     "user": User,
     "resource_group": ResourceGroup,
@@ -222,7 +222,7 @@ _ENTITY_MODELS = {
 
 
 def _fmt_entity(m, _a) -> str:
-    """``template:hello.py`` instead of ``template / 3``."""
+    """``routine:hello.py`` instead of ``routine / 3``."""
     if m.entity_type is None or m.entity_id is None:
         return "—"
     model = _ENTITY_MODELS.get(m.entity_type)
@@ -349,12 +349,12 @@ class AuthIdentityAdmin(_Base, model=AuthIdentity):
     column_searchable_list = ["provider", "provider_sub"]  # noqa: RUF012
 
 
-class TemplateCategoryAdmin(_Base, model=TemplateCategory):
+class RoutineCategoryAdmin(_Base, model=RoutineCategory):
     column_list = ["name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
-class TemplateAdmin(_Base, model=Template):
+class RoutineAdmin(_Base, model=Routine):
     column_list = ["name", "version", "category", "is_active", "created_by", "updated_at"]  # noqa: RUF012
     column_labels = {"category": "category", "created_by": "created by"}  # noqa: RUF012
     column_formatters = {"created_by": _fmt_created_by}  # noqa: RUF012
@@ -383,10 +383,10 @@ class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
     column_labels = {"resource": "resource", "metadata_type": "metadata type"}  # noqa: RUF012
 
 
-class ResourceTemplateAdmin(_Base, model=ResourceTemplate):
-    column_list = ["resource_id", "template_id"]  # noqa: RUF012
-    column_labels = {"resource_id": "resource", "template_id": "template"}  # noqa: RUF012
-    column_formatters = {"resource_id": _fmt_resource, "template_id": _fmt_template}  # noqa: RUF012
+class ResourceRoutineAdmin(_Base, model=ResourceRoutine):
+    column_list = ["resource_id", "routine_id"]  # noqa: RUF012
+    column_labels = {"resource_id": "resource", "routine_id": "routine"}  # noqa: RUF012
+    column_formatters = {"resource_id": _fmt_resource, "routine_id": _fmt_routine}  # noqa: RUF012
 
 
 class ResourceGroupAdmin(_Base, model=ResourceGroup):
@@ -407,11 +407,11 @@ class GroupAssignmentAdmin(_Base, model=GroupAssignment):
     column_formatters_detail = {"group_id": _fmt_group, "principal_id": _fmt_principal, "created_by": _fmt_created_by}  # noqa: RUF012
 
 
-class TemplateGrantAdmin(_Base, model=TemplateGrant):
-    column_list = ["template_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
-    column_labels = {"template_id": "template", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
-    column_formatters = {"template_id": _fmt_template, "principal_id": _fmt_principal}  # noqa: RUF012
-    column_formatters_detail = {"template_id": _fmt_template, "principal_id": _fmt_principal}  # noqa: RUF012
+class RoutineGrantAdmin(_Base, model=RoutineGrant):
+    column_list = ["routine_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
+    column_labels = {"routine_id": "routine", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
+    column_formatters = {"routine_id": _fmt_routine, "principal_id": _fmt_principal}  # noqa: RUF012
+    column_formatters_detail = {"routine_id": _fmt_routine, "principal_id": _fmt_principal}  # noqa: RUF012
 
 
 class ResourceGrantAdmin(_Base, model=ResourceGrant):
@@ -426,11 +426,11 @@ class ExecutionModeAdmin(_Base, model=ExecutionMode):
     column_searchable_list = ["code"]  # noqa: RUF012
 
 
-class TemplateUsageAdmin(_Base, model=TemplateUsage):
-    column_list = ["template_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
-    column_labels = {"template_id": "template", "resource_id": "resource", "requested_by": "requested by", "mode_id": "mode", "external_dispatch_id": "dispatch id", "use_count": "uses"}  # noqa: RUF012
-    column_formatters = {"template_id": _fmt_template, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
-    column_formatters_detail = {"template_id": _fmt_template, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
+class RoutineUsageAdmin(_Base, model=RoutineUsage):
+    column_list = ["routine_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
+    column_labels = {"routine_id": "routine", "resource_id": "resource", "requested_by": "requested by", "mode_id": "mode", "external_dispatch_id": "dispatch id", "use_count": "uses"}  # noqa: RUF012
+    column_formatters = {"routine_id": _fmt_routine, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
+    column_formatters_detail = {"routine_id": _fmt_routine, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
 
 
 class DocsLinkView(BaseView):
@@ -446,11 +446,11 @@ class DocsLinkView(BaseView):
 
 _VIEWS = [
     UserAdmin, RoleAdmin, PermissionAdmin, RolePermissionAdmin, UserRoleAdmin,
-    AuthIdentityAdmin, TemplateCategoryAdmin, TemplateAdmin, ResourceTypeAdmin,
-    MetadataTypeAdmin, ResourceMetadataAdmin, ResourceTemplateAdmin, ResourceAdmin,
+    AuthIdentityAdmin, RoutineCategoryAdmin, RoutineAdmin, ResourceTypeAdmin,
+    MetadataTypeAdmin, ResourceMetadataAdmin, ResourceRoutineAdmin, ResourceAdmin,
     ResourceGroupAdmin,
-    ResourceGroupMemberAdmin, GroupAssignmentAdmin, TemplateGrantAdmin,
-    ResourceGrantAdmin, ExecutionModeAdmin, TemplateUsageAdmin,
+    ResourceGroupMemberAdmin, GroupAssignmentAdmin, RoutineGrantAdmin,
+    ResourceGrantAdmin, ExecutionModeAdmin, RoutineUsageAdmin,
     ProcessorAdmin, ExecutionResultAdmin, ActivityLogAdmin,
 ]
 

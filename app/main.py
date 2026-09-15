@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=__version__,
-        description="Template Management PoC — retrieve/maintain/categorize templates; execution is out-of-scope (see plan.md).",
+        description="Routine Management PoC — retrieve/maintain/categorize routines; execution is out-of-scope (see plan.md).",
         lifespan=lifespan,
     )
     app.add_middleware(RequestIDMiddleware)
@@ -71,7 +71,7 @@ def create_app() -> FastAPI:
     from app.api.v1 import resource_types as resource_types_router
     from app.api.v1 import resources as resources_router
     from app.api.v1 import roles as roles_router
-    from app.api.v1 import templates as templates_router
+    from app.api.v1 import routines as routines_router
     from app.api.v1 import usages as usages_router
     from app.api.v1 import users as users_router
 
@@ -79,7 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router.router, prefix="/api/v1/users", tags=["users"])
     app.include_router(roles_router.router, prefix="/api/v1/roles", tags=["roles"])
     app.include_router(categories_router.router, prefix="/api/v1/categories", tags=["categories"])
-    app.include_router(templates_router.router, prefix="/api/v1/templates", tags=["templates"])
+    app.include_router(routines_router.router, prefix="/api/v1/routines", tags=["routines"])
     app.include_router(resources_router.router, prefix="/api/v1/resources", tags=["resources"])
     app.include_router(
         resource_types_router.router, prefix="/api/v1/resource-types", tags=["resource-types"]

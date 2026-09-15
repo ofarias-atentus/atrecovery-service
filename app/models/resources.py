@@ -99,24 +99,24 @@ class ResourceMetadata(Base, TimestampMixin):
         return f"resource:{self.resource_id} :: metadata-type:{self.metadata_type_id}"
 
 
-class ResourceTemplate(Base):
-    """Associates one template with one resource (resource-first execution).
+class ResourceRoutine(Base):
+    """Associates one routine with one resource (resource-first execution).
 
-    A template can only be executed against a resource it is associated
+    A routine can only be executed against a resource it is associated
     with; a resource with no rows here runs nothing (closed world).
     """
 
-    __tablename__ = "resource_templates"
+    __tablename__ = "resource_routines"
 
     resource_id: Mapped[int] = mapped_column(
         ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
     )
-    template_id: Mapped[int] = mapped_column(
-        ForeignKey("templates.id", ondelete="CASCADE"), primary_key=True
+    routine_id: Mapped[int] = mapped_column(
+        ForeignKey("routines.id", ondelete="CASCADE"), primary_key=True
     )
 
     def __str__(self) -> str:
-        return f"resource:{self.resource_id} ↔ template:{self.template_id}"
+        return f"resource:{self.resource_id} ↔ routine:{self.routine_id}"
 
 
 class ResourceGroup(Base, TimestampMixin):

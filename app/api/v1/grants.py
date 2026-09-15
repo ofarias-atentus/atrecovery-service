@@ -1,6 +1,6 @@
 """Grant management router (admin only).
 
-``POST/GET /grants/templates`` + ``DELETE /grants/templates/{id}`` and the
+``POST/GET /grants/routines`` + ``DELETE /grants/routines/{id}`` and the
 same for ``/grants/resources``. Guards: ``admin:manage``; principals must
 exist (user/role/group rows); no duplicate grant for the same target +
 principal (409).
@@ -11,15 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_admin
 from app.db.session import get_db
-from app.models.catalog import Template
-from app.models.grants import ResourceGrant, TemplateGrant
+from app.models.catalog import Routine
+from app.models.grants import ResourceGrant, RoutineGrant
 from app.models.identity import Role, User
 from app.models.resources import Resource, ResourceGroup
 from app.schemas.grants import (
     ResourceGrantCreate,
     ResourceGrantRead,
-    TemplateGrantCreate,
-    TemplateGrantRead,
+    RoutineGrantCreate,
+    RoutineGrantRead,
 )
 from app.services.activity import GRANT_CHANGED, client_ip, log_activity
 
@@ -38,82 +38,82 @@ async def _check_principal(db: AsyncSession, principal_type: str, principal_id: 
         )
 
 
-# ---- template grants ----
+# ---- routine grants ----
 
 
 @router.post(
-    "/templates",
-    response_model=TemplateGrantRead,
+    "/routines",
+    response_model=RoutineGrantRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Grant template access to a principal",
+    summary="Grant routine access to a principal",
 )
-async def create_template_grant(
-    body: TemplateGrantCreate,
+async def create_routine_grant(
+    body: RoutineGrantCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(ADMIN),
-) -> TemplateGrant:
+) -> RoutineGrant:
     if (
-        await db.execute(select(Template.id).where(Template.id == body.template_id))
+        await db.execute(select(Routine.id).where(Routine.id == body.routine_id))
     ).scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="template not found")
+        raise HTTPException(status_code=404, detail="routine not found")
     await _check_principal(db, body.principal_type, body.principal_id)
     dup = await db.execute(
-        select(TemplateGrant).where(
-            TemplateGrant.template_id == body.template_id,
-            TemplateGrant.principal_type == body.principal_type,
-            TemplateGrant.principal_id == body.principal_id,
+        select(RoutineGrant).where(
+            RoutineGrant.routine_id == body.routine_id,
+            RoutineGrant.principal_type == body.principal_type,
+            RoutineGrant.principal_id == body.principal_id,
         )
     )
     if dup.scalar_one_or_none() is not None:
         raise HTTPException(status_code=409, detail="grant already exists")
-    g = TemplateGrant(**body.model_dump())
+    g = RoutineGrant(**body.model_dump())
     db.add(g)
     await db.commit()
     await db.refresh(g)
     await log_activity(
         db, action=GRANT_CHANGED, user_id=user.id,
-        entity_type="template_grant", entity_id=g.id,
-        meta={"op": "created", "template_id": g.template_id,
+        entity_type="routine_grant", entity_id=g.id,
+        meta={"op": "created", "routine_id": g.routine_id,
               "principal_type": g.principal_type, "principal_id": g.principal_id},
         ip=client_ip(request),
     )
     return g
 
 
-@router.get("/templates", response_model=list[TemplateGrantRead], summary="List template grants")
-async def list_template_grants(
-    template_id: int | None = None,
+@router.get("/routines", response_model=list[RoutineGrantRead], summary="List routine grants")
+async def list_routine_grants(
+    routine_id: int | None = None,
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(ADMIN),
-) -> list[TemplateGrant]:
-    stmt = select(TemplateGrant).order_by(TemplateGrant.id)
-    if template_id is not None:
-        stmt = stmt.where(TemplateGrant.template_id == template_id)
+) -> list[RoutineGrant]:
+    stmt = select(RoutineGrant).order_by(RoutineGrant.id)
+    if routine_id is not None:
+        stmt = stmt.where(RoutineGrant.routine_id == routine_id)
     return list((await db.execute(stmt.limit(limit).offset(offset))).scalars().all())
 
 
 @router.delete(
-    "/templates/{grant_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete template grant"
+    "/routines/{grant_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete routine grant"
 )
-async def delete_template_grant(
+async def delete_routine_grant(
     grant_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(ADMIN),
 ) -> None:
-    g = (await db.execute(select(TemplateGrant).where(TemplateGrant.id == grant_id))).scalar_one_or_none()
+    g = (await db.execute(select(RoutineGrant).where(RoutineGrant.id == grant_id))).scalar_one_or_none()
     if g is None:
         raise HTTPException(status_code=404, detail="grant not found")
-    meta = {"op": "deleted", "template_id": g.template_id,
+    meta = {"op": "deleted", "routine_id": g.routine_id,
             "principal_type": g.principal_type, "principal_id": g.principal_id}
     await db.delete(g)
     await db.commit()
     await log_activity(
         db, action=GRANT_CHANGED, user_id=user.id,
-        entity_type="template_grant", entity_id=grant_id, meta=meta, ip=client_ip(request),
+        entity_type="routine_grant", entity_id=grant_id, meta=meta, ip=client_ip(request),
     )
 
 

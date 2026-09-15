@@ -46,7 +46,7 @@ class ExecutionResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     usage_id: Mapped[int] = mapped_column(
-        ForeignKey("template_usages.id", ondelete="CASCADE"), index=True
+        ForeignKey("routine_usages.id", ondelete="CASCADE"), index=True
     )
     processor_id: Mapped[int] = mapped_column(
         ForeignKey("processor_services.id", ondelete="CASCADE"), index=True

@@ -3,9 +3,9 @@ from app.schemas.catalog import (  # noqa: F401
     CategoryCreate,
     CategoryRead,
     CategoryUpdate,
-    TemplateCreate,
-    TemplateRead,
-    TemplateUpdate,
+    RoutineCreate,
+    RoutineRead,
+    RoutineUpdate,
 )
 from app.schemas.identity import (  # noqa: F401
     MeRead,
@@ -36,5 +36,5 @@ from app.schemas.resources import (  # noqa: F401
     ResourceTypeRead,
     ResourceTypeUpdate,
     ResourceUpdate,
-    TemplateAttach,
+    RoutineAttach,
 )
