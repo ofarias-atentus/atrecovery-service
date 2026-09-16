@@ -162,3 +162,14 @@ class GroupRead(BaseModel):
     description: str | None = None
     resources: list[str] = []  # resource identifiers
     assignments: list[AssignmentRead] = []
+
+
+class ResourceImportRequest(BaseModel):
+    rows: list[dict[str, Any]] = Field(min_length=1, max_length=1000)
+
+
+class ResourceImportResult(BaseModel):
+    created: int
+    updated: int
+    total: int
+    identifiers: list[str] = []

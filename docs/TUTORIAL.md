@@ -119,6 +119,46 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/resources/$RES/metadata \
   -d '{"metadata_type":"monitor","data":{"monitor":"m1"}}'
 ```
 
+### 4b. Bulk import monitor/device CSV (admin only)
+
+Admins can load monitor inventory exports as resources plus `monitor`
+metadata in one atomic operation. The same validation runs for the admin UI,
+the CSV API, and the JSON API.
+
+CSV contract (UTF-8, max 1000 rows):
+
+```text
+monitor_id,nodo_id,nombre,descripcion,hostname,replic_dbhost,servidor_log,id,device_id,device_nombre,activo,device_descripcion,device_ultima_actualizacion,platform,platform_version,fecha_ultima_replicacion
+4787,2270,galaxy-a36-mx-3,galaxy-a36-mx-3,monmobile-mx-32.internal.atentus.com,10.20.15.68,Monmobile-mx-32.internal.atentus.com:5000,1757,RFGYC356WTJ,galaxy-a36-mx-3,true,galaxy-a36-mx-3,2026-08-14 19:45:43.399,android,15.0,2026-08-14 19:45:43.399
+```
+
+Mapping: `device_id` becomes the resource identifier/`data.udid`;
+`device_nombre` becomes the resource name/`data.nombre`; `platform`,
+`platform_version`, `device_descripcion`, and both timestamps land in
+resource `data`; `monitor_id`, `nodo_id`, `nombre`, `descripcion`,
+`hostname`, `replic_dbhost`, `servidor_log`, and source `id` land in the
+`monitor` metadata entry. `activo` sets `is_active`.
+
+Behavior: existing `device_id` values are updated (resource plus monitor
+entry); missing values are created. Any invalid row rolls back the whole
+file. Every success writes one `resource.imported` audit row with counts.
+
+```bash
+# CSV upload (admin only; operator gets 403, anonymous gets 401):
+curl -s -X POST http://127.0.0.1:8000/api/v1/resources/import/csv \
+  -H "Authorization: Bearer $ADMIN" -F "file=@inventory.csv" | python3 -m json.tool
+# → {"created":1,"updated":0,"total":1,"identifiers":["RFGYC356WTJ"]}
+
+# Equivalent JSON rows API:
+curl -s -X POST http://127.0.0.1:8000/api/v1/resources/import/json \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"rows":[{"monitor_id":"4787","nodo_id":"2270","nombre":"galaxy-a36-mx-3","descripcion":"galaxy-a36-mx-3","hostname":"monmobile-mx-32.internal.atentus.com","replic_dbhost":"10.20.15.68","servidor_log":"Monmobile-mx-32.internal.atentus.com:5000","id":"1757","device_id":"RFGYC356WTJ","device_nombre":"galaxy-a36-mx-3","activo":"true","device_descripcion":"galaxy-a36-mx-3","device_ultima_actualizacion":"2026-08-14 19:45:43.399","platform":"android","platform_version":"15.0","fecha_ultima_replicacion":"2026-08-14 19:45:43.399"}]}' \
+  | python3 -m json.tool
+```
+
+Or open http://127.0.0.1:8000/admin, log in as admin, and use
+**Import Resources**.
+
 ## 5. Share devices with resource groups
 
 A group is a named box of devices with **two separate lists** — don't mix them up:

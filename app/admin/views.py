@@ -444,6 +444,78 @@ class DocsLinkView(BaseView):
         return RedirectResponse(url="/docs")
 
 
+class ResourceImportView(BaseView):
+    """Admin-only CSV import for resources + monitor metadata.
+
+    Uses the same shared importer as the REST endpoints, so validation,
+    atomic upsert, and audit behavior are identical. Reachable from the
+    admin navigation; session auth is enforced by ``AdminAuth``.
+    """
+
+    name = "Import Resources"
+    icon = "fa-solid fa-upload"
+
+    @expose("/resource-import", methods=["GET", "POST"])
+    async def resource_import(self, request: Request):
+        import html
+
+        from fastapi import HTTPException
+        from starlette.responses import HTMLResponse
+
+        from app.db.session import get_session_factory
+        from app.services.resource_import import import_rows, parse_csv_text
+
+        message = ""
+        if request.method == "POST":
+            form = await request.form()
+            upload = form.get("file")
+            data = b""
+            if upload is not None and hasattr(upload, "read"):
+                data = await upload.read()
+            try:
+                if not data:
+                    raise HTTPException(status_code=422, detail="csv: no file uploaded")
+                try:
+                    text = data.decode("utf-8-sig")
+                except UnicodeDecodeError as e:
+                    raise HTTPException(
+                        status_code=422, detail="csv: file must be UTF-8"
+                    ) from e
+                rows = parse_csv_text(text, source="csv")
+                user_id = request.session.get("user_id")
+                ip = request.client.host if request.client else None
+                async with get_session_factory()() as session:
+                    result = await import_rows(
+                        session, rows, source="csv", user_id=user_id, ip=ip
+                    )
+                message = (
+                    f"<p><strong>Imported {result['total']} rows: "
+                    f"{result['created']} created, {result['updated']} updated.</strong><br>"
+                    f"Identifiers: {html.escape(', '.join(result['identifiers']))}</p>"
+                )
+            except HTTPException as e:
+                message = f"<p><strong>Import failed:</strong> {html.escape(str(e.detail))}</p>"
+
+        body = f"""<!doctype html><html><head><title>Import Resources</title></head>
+<body style="font-family:sans-serif;max-width:720px;margin:2rem auto">
+<h1>Import Resources (CSV, admin only)</h1>
+<p>Upload the monitor/device CSV. Every row is validated against the
+<em>mobile_device</em> and <em>monitor</em> schemas; any invalid row rolls back
+the whole file. Existing <em>device_id</em> values are updated.</p>
+{message}
+<form method="post" enctype="multipart/form-data">
+<input type="file" name="file" accept=".csv,text/csv" required>
+<button type="submit">Import</button>
+</form>
+<p>Required headers:<br><code>monitor_id,nodo_id,nombre,descripcion,hostname,
+replic_dbhost,servidor_log,id,device_id,device_nombre,activo,
+device_descripcion,device_ultima_actualizacion,platform,platform_version,
+fecha_ultima_replicacion</code></p>
+<p><a href="/admin/">Back to admin</a></p>
+</body></html>"""
+        return HTMLResponse(body)
+
+
 _VIEWS = [
     UserAdmin, RoleAdmin, PermissionAdmin, RolePermissionAdmin, UserRoleAdmin,
     AuthIdentityAdmin, RoutineCategoryAdmin, RoutineAdmin, ResourceTypeAdmin,
@@ -463,3 +535,4 @@ def setup_admin(app: FastAPI) -> None:
     for view in _VIEWS:
         admin.add_view(view)
     admin.add_view(DocsLinkView)
+    admin.add_view(ResourceImportView)
