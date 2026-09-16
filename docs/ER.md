@@ -67,7 +67,15 @@ Text version:
 Notes:
 - `routine_usages` relay dispatch requests; `execution_results` are reported
   by external processors (`X-Processor-Token`).
+- `processor_services.details` is free-form JSON for dynamic info (endpoint,
+  region, labels, ...), set on create and editable via PATCH / admin.
+- `routine_categories` are admin-only: reads need `category:view`, writes
+  need `category:manage` (only the admin role holds them by seed).
 - Grants complement coarse permission codes; group grants cover member resources.
 - `activity_logs` is append-only (no update/delete API; read-only in `/admin`).
 - Schema change note: delete pre-existing `data/app.db` before reseeding
-  (category input_schema, resources split into data JSON + typed metadata).
+  for a clean schema (category input_schema, resources split into data JSON
+  + typed metadata, processor `details` JSON, category permissions). Reseed
+  also grants the new `category:view` / `category:manage` codes to the admin
+  role; existing `processor_services` tables gain `details` automatically via
+  a best-effort `ALTER TABLE` in `init_db`.

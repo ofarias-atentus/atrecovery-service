@@ -14,7 +14,12 @@ from app.core.deps import hash_processor_token, require_admin
 from app.db.session import get_db
 from app.models.beacons import ProcessorService
 from app.models.identity import User
-from app.schemas.beacons import ProcessorCreate, ProcessorCreateResult, ProcessorRead
+from app.schemas.beacons import (
+    ProcessorCreate,
+    ProcessorCreateResult,
+    ProcessorRead,
+    ProcessorUpdate,
+)
 
 router = APIRouter()
 ADMIN = require_admin()
@@ -33,13 +38,15 @@ async def create_processor(
         raise HTTPException(status_code=409, detail="processor name already exists")
     token = secrets.token_urlsafe(32)
     proc = ProcessorService(
-        name=body.name, token_hash=hash_processor_token(token), scopes=body.scopes
+        name=body.name, token_hash=hash_processor_token(token),
+        scopes=body.scopes, details=body.details,
     )
     db.add(proc)
     await db.commit()
     await db.refresh(proc)
     return ProcessorCreateResult(
-        id=proc.id, name=proc.name, scopes=proc.scopes, is_active=proc.is_active, token=token
+        id=proc.id, name=proc.name, scopes=proc.scopes, details=proc.details,
+        is_active=proc.is_active, token=token,
     )
 
 
@@ -49,6 +56,29 @@ async def list_processors(
 ) -> list[ProcessorService]:
     result = await db.execute(select(ProcessorService).order_by(ProcessorService.id))
     return list(result.scalars().all())
+
+
+@router.patch("/{processor_id}", response_model=ProcessorRead, summary="Update processor")
+async def update_processor(
+    processor_id: int,
+    body: ProcessorUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(ADMIN),
+) -> ProcessorService:
+    proc = (
+        await db.execute(select(ProcessorService).where(ProcessorService.id == processor_id))
+    ).scalar_one_or_none()
+    if proc is None:
+        raise HTTPException(status_code=404, detail="processor not found")
+    if body.scopes is not None:
+        proc.scopes = body.scopes
+    if body.details is not None:
+        proc.details = body.details
+    if body.is_active is not None:
+        proc.is_active = body.is_active
+    await db.commit()
+    await db.refresh(proc)
+    return proc
 
 
 @router.delete("/{processor_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Deactivate processor")

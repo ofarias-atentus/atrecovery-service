@@ -11,7 +11,9 @@ the API) and shown once via flash. Timestamps (``created_at``/``updated_at``/
 
 Lists show human labels (names, not raw ids): models define ``__str__`` and
 views add ``column_list`` / ``column_labels`` / ``column_formatters`` that
-resolve FK ids to names. Detail pages keep every column for debugging.
+resolve FK ids to names. Every list starts with the row ``id`` (link tables
+without an ``id`` PK keep their composite keys instead). Detail pages keep
+every column for debugging.
 """
 from __future__ import annotations
 
@@ -237,7 +239,7 @@ def _fmt_entity(m, _a) -> str:
 class UserAdmin(_Base, model=User):
     # NOTE: column_list already omits hashed_password, so no
     # column_exclude_list (sqladmin forbids using both together).
-    column_list = ["username", "email", "roles", "is_superuser", "is_active"]  # noqa: RUF012
+    column_list = ["id", "username", "email", "roles", "is_superuser", "is_active"]  # noqa: RUF012
     column_searchable_list = ["username", "email"]  # noqa: RUF012
     column_details_exclude_list = ["hashed_password"]  # noqa: RUF012
     # hashed_password is exposed as a write-only password input and
@@ -261,13 +263,14 @@ class UserAdmin(_Base, model=User):
 
 class ProcessorAdmin(_Base, model=ProcessorService):
     # NOTE: column_list already omits token_hash (see UserAdmin note above).
-    column_list = ["name", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
     column_details_exclude_list = ["token_hash"]  # noqa: RUF012
     # The raw token is never typed in: it is auto-generated on create (like
     # the API), sha256-hashed before persist, and shown once via flash.
     # Token is immutable from the admin; rotation is a separate feature.
-    form_columns = ["name", "is_active"]  # noqa: RUF012
+    # ``details`` holds free-form dynamic JSON info and is editable here.
+    form_columns = ["name", "scopes", "details", "is_active"]  # noqa: RUF012
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
         await super().on_model_change(data, model, is_created, request)
@@ -300,7 +303,7 @@ class ActivityLogAdmin(_Base, model=ActivityLog):
     can_create = False
     can_edit = False
     can_delete = False
-    column_list = ["action", "user_id", "entity_type", "entity_id", "ip", "created_at"]  # noqa: RUF012
+    column_list = ["id", "action", "user_id", "entity_type", "entity_id", "ip", "created_at"]  # noqa: RUF012
     column_labels = {"user_id": "user", "entity_type": "entity", "entity_id": "entity ref"}  # noqa: RUF012
     column_formatters = {"user_id": _fmt_user, "entity_id": _fmt_entity}  # noqa: RUF012
     column_formatters_detail = {"user_id": _fmt_user, "entity_id": _fmt_entity}  # noqa: RUF012
@@ -311,19 +314,19 @@ class ExecutionResultAdmin(_Base, model=ExecutionResult):
     can_create = False
     can_edit = False
     can_delete = False
-    column_list = ["usage_id", "processor_id", "status", "received_at"]  # noqa: RUF012
+    column_list = ["id", "usage_id", "processor_id", "status", "received_at"]  # noqa: RUF012
     column_labels = {"usage_id": "usage", "processor_id": "processor"}  # noqa: RUF012
     column_formatters = {"usage_id": _fmt_usage, "processor_id": _fmt_processor}  # noqa: RUF012
     column_formatters_detail = {"usage_id": _fmt_usage, "processor_id": _fmt_processor}  # noqa: RUF012
 
 
 class RoleAdmin(_Base, model=Role):
-    column_list = ["name", "description", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class PermissionAdmin(_Base, model=Permission):
-    column_list = ["code", "description"]  # noqa: RUF012
+    column_list = ["id", "code", "description"]  # noqa: RUF012
     column_searchable_list = ["code"]  # noqa: RUF012
 
 
@@ -343,19 +346,19 @@ class UserRoleAdmin(_Base, model=UserRole):
 
 
 class AuthIdentityAdmin(_Base, model=AuthIdentity):
-    column_list = ["provider", "provider_sub", "user_id"]  # noqa: RUF012
+    column_list = ["id", "provider", "provider_sub", "user_id"]  # noqa: RUF012
     column_labels = {"provider_sub": "external id", "user_id": "user"}  # noqa: RUF012
     column_formatters = {"user_id": _fmt_user}  # noqa: RUF012
     column_searchable_list = ["provider", "provider_sub"]  # noqa: RUF012
 
 
 class RoutineCategoryAdmin(_Base, model=RoutineCategory):
-    column_list = ["name", "description", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class RoutineAdmin(_Base, model=Routine):
-    column_list = ["name", "version", "category", "is_active", "created_by", "updated_at"]  # noqa: RUF012
+    column_list = ["id", "name", "version", "category", "is_active", "created_by", "updated_at"]  # noqa: RUF012
     column_labels = {"category": "category", "created_by": "created by"}  # noqa: RUF012
     column_formatters = {"created_by": _fmt_created_by}  # noqa: RUF012
     column_formatters_detail = {"created_by": _fmt_created_by}  # noqa: RUF012
@@ -363,23 +366,23 @@ class RoutineAdmin(_Base, model=Routine):
 
 
 class ResourceAdmin(_Base, model=Resource):
-    column_list = ["name", "identifier", "resource_type", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "identifier", "resource_type", "is_active"]  # noqa: RUF012
     column_labels = {"resource_type": "type"}  # noqa: RUF012
     column_searchable_list = ["name", "identifier"]  # noqa: RUF012
 
 
 class ResourceTypeAdmin(_Base, model=ResourceType):
-    column_list = ["name", "description", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class MetadataTypeAdmin(_Base, model=MetadataType):
-    column_list = ["name", "description", "is_active"]  # noqa: RUF012
+    column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
-    column_list = ["resource", "metadata_type"]  # noqa: RUF012
+    column_list = ["id", "resource", "metadata_type"]  # noqa: RUF012
     column_labels = {"resource": "resource", "metadata_type": "metadata type"}  # noqa: RUF012
 
 
@@ -390,7 +393,7 @@ class ResourceRoutineAdmin(_Base, model=ResourceRoutine):
 
 
 class ResourceGroupAdmin(_Base, model=ResourceGroup):
-    column_list = ["name", "description"]  # noqa: RUF012
+    column_list = ["id", "name", "description"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
@@ -401,33 +404,33 @@ class ResourceGroupMemberAdmin(_Base, model=ResourceGroupMember):
 
 
 class GroupAssignmentAdmin(_Base, model=GroupAssignment):
-    column_list = ["group_id", "principal_type", "principal_id", "created_by"]  # noqa: RUF012
+    column_list = ["id", "group_id", "principal_type", "principal_id", "created_by"]  # noqa: RUF012
     column_labels = {"group_id": "group", "principal_type": "type", "principal_id": "principal", "created_by": "created by"}  # noqa: RUF012
     column_formatters = {"group_id": _fmt_group, "principal_id": _fmt_principal, "created_by": _fmt_created_by}  # noqa: RUF012
     column_formatters_detail = {"group_id": _fmt_group, "principal_id": _fmt_principal, "created_by": _fmt_created_by}  # noqa: RUF012
 
 
 class RoutineGrantAdmin(_Base, model=RoutineGrant):
-    column_list = ["routine_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
+    column_list = ["id", "routine_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
     column_labels = {"routine_id": "routine", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
     column_formatters = {"routine_id": _fmt_routine, "principal_id": _fmt_principal}  # noqa: RUF012
     column_formatters_detail = {"routine_id": _fmt_routine, "principal_id": _fmt_principal}  # noqa: RUF012
 
 
 class ResourceGrantAdmin(_Base, model=ResourceGrant):
-    column_list = ["resource_id", "group_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
+    column_list = ["id", "resource_id", "group_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
     column_labels = {"resource_id": "resource", "group_id": "group", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
     column_formatters = {"resource_id": _fmt_resource, "group_id": _fmt_group, "principal_id": _fmt_principal}  # noqa: RUF012
     column_formatters_detail = {"resource_id": _fmt_resource, "group_id": _fmt_group, "principal_id": _fmt_principal}  # noqa: RUF012
 
 
 class ExecutionModeAdmin(_Base, model=ExecutionMode):
-    column_list = ["code", "description"]  # noqa: RUF012
+    column_list = ["id", "code", "description"]  # noqa: RUF012
     column_searchable_list = ["code"]  # noqa: RUF012
 
 
 class RoutineUsageAdmin(_Base, model=RoutineUsage):
-    column_list = ["routine_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
+    column_list = ["id", "routine_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
     column_labels = {"routine_id": "routine", "resource_id": "resource", "requested_by": "requested by", "mode_id": "mode", "external_dispatch_id": "dispatch id", "use_count": "uses"}  # noqa: RUF012
     column_formatters = {"routine_id": _fmt_routine, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
     column_formatters_detail = {"routine_id": _fmt_routine, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012

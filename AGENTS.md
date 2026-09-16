@@ -62,6 +62,14 @@ uvicorn app.main:app --reload
   exact required header set.
 - Declare static resource routes such as `/import/csv` and `/import/json`
   before `/{resource_id}` so the dynamic route does not capture them.
+- Categories are admin-only by seed: reads require `category:view`, writes
+  require `category:manage`. Grant these codes explicitly to non-admin roles
+  when read/write access is needed.
+- `ProcessorService.details` is nullable free-form JSON for dynamic info.
+  Accept it on processor create, return it on reads, support it on
+  `PATCH /api/v1/processors/{id}`, and keep it editable in the Admin GUI.
+- Start every Admin `ModelView.column_list` with `id` (link tables without an
+  `id` PK keep their composite keys instead).
 - Use `is_active` soft deactivation where the existing domain keeps historical
   records, rather than deleting referenced data.
 - Use `app.core.time.utcnow_naive()` for persisted/domain timestamps. JWT

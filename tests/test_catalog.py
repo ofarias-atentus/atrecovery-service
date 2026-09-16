@@ -53,7 +53,8 @@ async def test_seed_catalog_present(client):
 
 async def test_operator_can_read_but_not_write(client):
     h = await _operator(client)
-    assert (await client.get("/api/v1/categories", headers=h)).status_code == 200
+    # categories are admin-only by seed (category:view/manage); operator is denied
+    assert (await client.get("/api/v1/categories", headers=h)).status_code == 403
     assert (await client.get("/api/v1/routines", headers=h)).status_code == 200
     assert (await client.get("/api/v1/resources", headers=h)).status_code == 200
     assert (await client.get("/api/v1/resource-types", headers=h)).status_code == 200
@@ -310,3 +311,39 @@ async def test_groups_members_assignments(client):
     assert "Q1" not in g4["resources"]
     aid = next(a["id"] for a in g3["assignments"] if a["principal_type"] == "user")
     assert (await client.delete(f"/api/v1/resource-groups/assignments/{aid}", headers=h)).status_code == 204
+
+
+async def test_categories_admin_only_unless_granted(client):
+    admin = await _admin(client)
+    op = await _operator(client)
+    # admin sees seed categories; operator is denied on list, detail, and write
+    assert (await client.get("/api/v1/categories", headers=admin)).status_code == 200
+    assert (await client.get("/api/v1/categories", headers=op)).status_code == 403
+    assert (await client.get("/api/v1/categories/1", headers=op)).status_code == 403
+    assert (
+        await client.post("/api/v1/categories", headers=op, json={"name": "nope"})
+    ).status_code == 403
+    # permission codes exist; admin role holds them, operator role does not
+    perms = {p["code"] for p in (await client.get("/api/v1/roles/permissions", headers=admin)).json()}
+    assert {"category:view", "category:manage"} <= perms
+    roles = {r["name"]: r for r in (await client.get("/api/v1/roles", headers=admin)).json()}
+    assert {"category:view", "category:manage"} <= set(roles["admin"]["permissions"])
+    assert "category:view" not in set(roles["operator"]["permissions"])
+    # explicit grant: a viewer role with category:view can read but not write
+    r = await client.post(
+        "/api/v1/roles", headers=admin,
+        json={"name": "cat-viewer", "permission_codes": ["category:view"]},
+    )
+    assert r.status_code == 201, r.text
+    u = await client.post(
+        "/api/v1/users", headers=admin,
+        json={"username": "catop", "email": "catop@example.com",
+              "password": "catop1234", "role_names": ["cat-viewer"]},
+    )
+    assert u.status_code == 201, u.text
+    viewer = auth_headers((await login(client, "catop", "catop1234"))["access_token"])
+    assert (await client.get("/api/v1/categories", headers=viewer)).status_code == 200
+    assert (await client.get("/api/v1/categories/1", headers=viewer)).status_code == 200
+    assert (
+        await client.post("/api/v1/categories", headers=viewer, json={"name": "nope2"})
+    ).status_code == 403

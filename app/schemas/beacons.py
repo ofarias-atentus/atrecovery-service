@@ -13,6 +13,16 @@ BEACON_TO_USAGE = {"ok": "done", "error": "failed", "partial": "running"}
 class ProcessorCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     scopes: list[str] = Field(default_factory=lambda: ["beacon:report"])
+    details: dict[str, Any] | None = Field(
+        default=None,
+        description="Free-form dynamic info (endpoint, region, labels, ...).",
+    )
+
+
+class ProcessorUpdate(BaseModel):
+    scopes: list[str] | None = None
+    details: dict[str, Any] | None = None
+    is_active: bool | None = None
 
 
 class ProcessorRead(BaseModel):
@@ -23,6 +33,7 @@ class ProcessorRead(BaseModel):
     id: int
     name: str
     scopes: list[str] | None = None
+    details: dict[str, Any] | None = None
     is_active: bool
 
 

@@ -24,6 +24,7 @@ class ProcessorService(Base):
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     token_hash: Mapped[str] = mapped_column(String(64))
     scopes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
 
     def __str__(self) -> str:

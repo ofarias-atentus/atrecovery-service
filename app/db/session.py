@@ -55,6 +55,20 @@ async def init_db() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Best-effort additive migration (no Alembic configured): ensure
+        # ProcessorService.details exists on pre-existing SQLite databases
+        # where create_all cannot add columns to an existing table.
+        import logging
+
+        from sqlalchemy import text
+        from sqlalchemy.exc import SQLAlchemyError
+
+        try:
+            cols = (await conn.execute(text("PRAGMA table_info(processor_services)"))).all()
+            if cols and "details" not in {c[1] for c in cols}:
+                await conn.execute(text("ALTER TABLE processor_services ADD COLUMN details JSON"))
+        except SQLAlchemyError as e:
+            logging.getLogger(__name__).debug("processor details migration skipped: %s", e)
 
 
 async def dispose_engine() -> None:

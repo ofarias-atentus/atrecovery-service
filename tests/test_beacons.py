@@ -234,3 +234,36 @@ async def test_lab_runner_seed_processor_exists(client):
     admin = await _admin(client)
     names = {p["name"] for p in (await client.get("/api/v1/processors", headers=admin)).json()}
     assert "lab-runner" in names
+
+
+async def test_processor_details_roundtrip_and_patch(client):
+    admin, op = await _admin(client), await _operator(client)
+    await _make_processor(
+        client, admin, name="detail-runner",
+        scopes=["beacon:report"],
+    )
+    # create with dynamic details JSON
+    r = await client.post(
+        "/api/v1/processors", headers=admin,
+        json={"name": "dyn-runner", "details": {"region": "lab", "labels": ["gpu"]}},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["details"] == {"region": "lab", "labels": ["gpu"]}
+    assert body["token"] and "token_hash" not in body
+    listed = {p["name"]: p for p in (await client.get("/api/v1/processors", headers=admin)).json()}
+    assert listed["dyn-runner"]["details"] == {"region": "lab", "labels": ["gpu"]}
+    assert listed["detail-runner"]["details"] is None
+    # patch details + scopes as admin; operator is denied
+    upd = await client.patch(
+        f"/api/v1/processors/{body['id']}", headers=admin,
+        json={"details": {"region": "lab-2", "owner": "qa"}, "scopes": ["beacon:report"]},
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["details"] == {"region": "lab-2", "owner": "qa"}
+    assert (
+        await client.patch(
+            f"/api/v1/processors/{body['id']}", headers=op, json={"details": {"x": 1}}
+        )
+    ).status_code == 403
+    assert (await client.patch("/api/v1/processors/9999", headers=admin, json={"details": {}})).status_code == 404

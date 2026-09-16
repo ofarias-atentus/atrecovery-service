@@ -58,9 +58,13 @@ Use them as `-H "Authorization: Bearer $OP"` (or `$ADMIN`).
 
 ## 2. Browse the catalog (categories → routines)
 
+Categories are admin-only (`category:view` / `category:manage`); operators
+get **403** unless the permission is explicitly granted to their role.
+
 ```bash
 # What routine kinds exist? Note python's input_schema: every routine in it needs {"source": ...}
-curl -s http://127.0.0.1:8000/api/v1/categories -H "Authorization: Bearer $OP" | python3 -m json.tool
+# (admin only — operator gets 403 here)
+curl -s http://127.0.0.1:8000/api/v1/categories -H "Authorization: Bearer $ADMIN" | python3 -m json.tool
 
 # What routines can the operator see? (Just hello.py — access is grant-gated.)
 curl -s http://127.0.0.1:8000/api/v1/routines -H "Authorization: Bearer $OP" | python3 -m json.tool
@@ -367,11 +371,13 @@ the §6a call; ids below assume a fresh seed):
 ```bash
 # 0) You need a processor token, NOT a JWT. Either seed with a known one:
 #    SEED_PROCESSOR_TOKEN=lab-runner-demo-token python -m app.db.seed
-#    ...or mint a fresh processor as admin (the token is shown once):
+#    ...or mint a fresh processor as admin (the token is shown once).
+#    `details` is optional free-form JSON for dynamic info (endpoint, region, ...),
+#    editable later via PATCH /api/v1/processors/{id} or the Admin GUI:
 curl -s -X POST http://127.0.0.1:8000/api/v1/processors \
   -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
-  -d '{"name":"my-runner"}' | python3 -m json.tool
-# → {"id":...,"name":"my-runner","scopes":["beacon:report"],"is_active":true,"token":"..."}
+  -d '{"name":"my-runner","details":{"region":"lab"}}' | python3 -m json.tool
+# → {"id":...,"name":"my-runner","scopes":["beacon:report"],"details":{"region":"lab"},"is_active":true,"token":"..."}
 # Save it:  PTOKEN=<paste-token>   (or PTOKEN=lab-runner-demo-token for the seeded runner)
 ```
 

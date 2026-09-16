@@ -1,7 +1,8 @@
 """Routine categories router.
 
-Read: routine:view. Write: routine:manage.
-(Stage 3 will additionally enforce object-level grants.)
+Read: category:view. Write: category:manage.
+Admin-only by seed (only the admin role holds these codes); grant access
+to other roles by assigning the permission codes explicitly.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -14,8 +15,8 @@ from app.models.identity import User
 from app.schemas.catalog import CategoryCreate, CategoryRead, CategoryUpdate
 
 router = APIRouter()
-VIEW = require_permission("routine:view")
-MANAGE = require_permission("routine:manage")
+VIEW = require_permission("category:view")
+MANAGE = require_permission("category:manage")
 
 
 def _to_read(c: RoutineCategory) -> CategoryRead:

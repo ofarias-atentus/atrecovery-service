@@ -41,3 +41,37 @@ async def test_audit_views_read_only(client):
         r = await client.get(path)
         assert r.status_code in (403, 404, 405), (path, r.status_code)
     assert (await client.get("/admin/activity-log/list")).status_code == 200
+
+
+def test_admin_lists_start_with_id():
+    """Every ModelView with an ``id`` PK shows it first in the list."""
+    from app.admin.views import (
+        ActivityLogAdmin,
+        AuthIdentityAdmin,
+        ExecutionModeAdmin,
+        ExecutionResultAdmin,
+        GroupAssignmentAdmin,
+        MetadataTypeAdmin,
+        PermissionAdmin,
+        ProcessorAdmin,
+        ResourceAdmin,
+        ResourceGrantAdmin,
+        ResourceGroupAdmin,
+        ResourceMetadataAdmin,
+        ResourceTypeAdmin,
+        RoleAdmin,
+        RoutineAdmin,
+        RoutineCategoryAdmin,
+        RoutineGrantAdmin,
+        RoutineUsageAdmin,
+        UserAdmin,
+    )
+
+    for view in (
+        UserAdmin, ProcessorAdmin, ActivityLogAdmin, ExecutionResultAdmin,
+        RoleAdmin, PermissionAdmin, AuthIdentityAdmin, RoutineCategoryAdmin,
+        RoutineAdmin, ResourceTypeAdmin, MetadataTypeAdmin, ResourceMetadataAdmin,
+        ResourceAdmin, ResourceGroupAdmin, GroupAssignmentAdmin, RoutineGrantAdmin,
+        ResourceGrantAdmin, ExecutionModeAdmin, RoutineUsageAdmin,
+    ):
+        assert view.column_list[0] == "id", view.__name__
