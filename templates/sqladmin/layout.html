@@ -1,0 +1,12 @@
+{% extends "sqladmin_original/layout.html" %}
+{% block content_header %}
+<div class="row align-items-center">
+  <div class="col">
+    <h2 class="page-title">{{ title }}</h2>
+    <div class="page-pretitle">{{ subtitle }}</div>
+    {% if admin_summary %}
+    <p class="text-muted mt-1 mb-0">{{ admin_summary }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

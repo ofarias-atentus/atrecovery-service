@@ -115,6 +115,16 @@ class ResourceRoutine(Base):
         ForeignKey("routines.id", ondelete="CASCADE"), primary_key=True
     )
 
+    # Form/display-only relations so the admin can render select inputs
+    # instead of raw FK ids. viewonly: the FK columns above stay the
+    # single write path; no DB schema change.
+    resource: Mapped[Resource] = relationship(
+        "Resource", viewonly=True, lazy="selectin"
+    )
+    routine: Mapped[Any] = relationship(
+        "Routine", viewonly=True, lazy="selectin"
+    )
+
     def __str__(self) -> str:
         return f"resource:{self.resource_id} ↔ routine:{self.routine_id}"
 
@@ -145,6 +155,16 @@ class ResourceGroupMember(Base):
     )
     resource_id: Mapped[int] = mapped_column(
         ForeignKey("resources.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Form/display-only relations so the admin can render select inputs
+    # instead of raw FK ids. viewonly: the FK columns above stay the
+    # single write path; no DB schema change.
+    group: Mapped[ResourceGroup] = relationship(
+        "ResourceGroup", viewonly=True, lazy="selectin"
+    )
+    resource: Mapped[Resource] = relationship(
+        "Resource", viewonly=True, lazy="selectin"
     )
 
     def __str__(self) -> str:

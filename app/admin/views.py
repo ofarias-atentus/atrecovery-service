@@ -114,6 +114,10 @@ class AdminAuth(AuthenticationBackend):
 
 class _Base(ModelView):
     page_size = 50
+    # Short explanatory copy shown at the top of every admin page for the
+    # view. Every concrete subclass must set a non-empty value (enforced
+    # by tests); rendered by the shared ``sqladmin/layout.html`` override.
+    admin_summary: str = ""
     # Timestamps are fully automatic: created on insert, updated_at refreshed
     # on edit. They stay visible in list/detail but never appear in forms.
     # NOTE: subclasses using explicit form_columns (UserAdmin, ProcessorAdmin)
@@ -121,6 +125,18 @@ class _Base(ModelView):
     # needed there as a guard against crafted POSTs (include beats exclude
     # in sqladmin's _build_column_list).
     form_excluded_columns = ["created_at", "updated_at", "received_at"]  # noqa: RUF012
+
+    async def list_context(self, request: Request) -> dict[str, Any]:
+        return {"admin_summary": self.admin_summary}
+
+    async def details_context(self, request: Request) -> dict[str, Any]:
+        return {"admin_summary": self.admin_summary}
+
+    async def create_context(self, request: Request) -> dict[str, Any]:
+        return {"admin_summary": self.admin_summary}
+
+    async def edit_context(self, request: Request) -> dict[str, Any]:
+        return {"admin_summary": self.admin_summary}
 
     async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
         # created_at / received_at are immutable: always ignore user input so
@@ -236,7 +252,26 @@ def _fmt_entity(m, _a) -> str:
         return f"{m.entity_type}:{label}"
 
 
+def _rel_id(value: Any) -> int | None:
+    """Resolve an admin form value to an int PK.
+
+    Relationship select fields may yield a model instance, an int, or
+    a numeric string; raw FK inputs yield ints/strings. Returns None
+    when the value is empty or unresolvable.
+    """
+    if value is None or value == "":
+        return None
+    if hasattr(value, "id"):
+        pk = value.id
+        return int(pk) if pk is not None else None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 class UserAdmin(_Base, model=User):
+    admin_summary = "Manage user accounts, active status, superuser access, and assigned roles."
     # NOTE: column_list already omits hashed_password, so no
     # column_exclude_list (sqladmin forbids using both together).
     column_list = ["id", "username", "email", "roles", "is_superuser", "is_active"]  # noqa: RUF012
@@ -262,6 +297,7 @@ class UserAdmin(_Base, model=User):
 
 
 class ProcessorAdmin(_Base, model=ProcessorService):
+    admin_summary = "Manage external processors that report routine execution results."
     # NOTE: column_list already omits token_hash (see UserAdmin note above).
     column_list = ["id", "name", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
@@ -300,6 +336,7 @@ class ProcessorAdmin(_Base, model=ProcessorService):
 
 
 class ActivityLogAdmin(_Base, model=ActivityLog):
+    admin_summary = "Review the append-only audit trail of administrative and operational activity."
     can_create = False
     can_edit = False
     can_delete = False
@@ -311,6 +348,7 @@ class ActivityLogAdmin(_Base, model=ActivityLog):
 
 
 class ExecutionResultAdmin(_Base, model=ExecutionResult):
+    admin_summary = "Review processor-reported execution results. This audit data is read-only."
     can_create = False
     can_edit = False
     can_delete = False
@@ -321,16 +359,19 @@ class ExecutionResultAdmin(_Base, model=ExecutionResult):
 
 
 class RoleAdmin(_Base, model=Role):
+    admin_summary = "Define reusable access roles and their operational purpose."
     column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class PermissionAdmin(_Base, model=Permission):
+    admin_summary = "Define permission codes that roles use to authorize actions."
     column_list = ["id", "code", "description"]  # noqa: RUF012
     column_searchable_list = ["code"]  # noqa: RUF012
 
 
 class RolePermissionAdmin(_Base, model=RolePermission):
+    admin_summary = "Assign permission codes to roles."
     column_list = ["role_id", "permission_id"]  # noqa: RUF012
     column_labels = {"role_id": "role", "permission_id": "permission"}  # noqa: RUF012
     column_formatters = {  # noqa: RUF012
@@ -340,12 +381,14 @@ class RolePermissionAdmin(_Base, model=RolePermission):
 
 
 class UserRoleAdmin(_Base, model=UserRole):
+    admin_summary = "Assign roles to individual users."
     column_list = ["user_id", "role_id"]  # noqa: RUF012
     column_labels = {"user_id": "user", "role_id": "role"}  # noqa: RUF012
     column_formatters = {"user_id": _fmt_user, "role_id": lambda m, _a: _display_label(Role, m.role_id, "role")}  # noqa: RUF012
 
 
 class AuthIdentityAdmin(_Base, model=AuthIdentity):
+    admin_summary = "Link local or external provider identities to users."
     column_list = ["id", "provider", "provider_sub", "user_id"]  # noqa: RUF012
     column_labels = {"provider_sub": "external id", "user_id": "user"}  # noqa: RUF012
     column_formatters = {"user_id": _fmt_user}  # noqa: RUF012
@@ -353,11 +396,13 @@ class AuthIdentityAdmin(_Base, model=AuthIdentity):
 
 
 class RoutineCategoryAdmin(_Base, model=RoutineCategory):
+    admin_summary = "Organize routines and define optional input schemas for their content."
     column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class RoutineAdmin(_Base, model=Routine):
+    admin_summary = "Manage versioned routine definitions and their categories."
     column_list = ["id", "name", "version", "category", "is_active", "created_by", "updated_at"]  # noqa: RUF012
     column_labels = {"category": "category", "created_by": "created by"}  # noqa: RUF012
     column_formatters = {"created_by": _fmt_created_by}  # noqa: RUF012
@@ -366,44 +411,94 @@ class RoutineAdmin(_Base, model=Routine):
 
 
 class ResourceAdmin(_Base, model=Resource):
+    admin_summary = "Manage inventory resources, identifiers, types, data, and active status."
     column_list = ["id", "name", "identifier", "resource_type", "is_active"]  # noqa: RUF012
     column_labels = {"resource_type": "type"}  # noqa: RUF012
     column_searchable_list = ["name", "identifier"]  # noqa: RUF012
 
 
 class ResourceTypeAdmin(_Base, model=ResourceType):
+    admin_summary = "Define resource classes and optional schemas for resource data."
     column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class MetadataTypeAdmin(_Base, model=MetadataType):
+    admin_summary = "Define typed metadata records and optional schemas for their data."
     column_list = ["id", "name", "description", "is_active"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class ResourceMetadataAdmin(_Base, model=ResourceMetadata):
+    admin_summary = "Attach typed metadata entries to resources."
     column_list = ["id", "resource", "metadata_type"]  # noqa: RUF012
     column_labels = {"resource": "resource", "metadata_type": "metadata type"}  # noqa: RUF012
 
 
 class ResourceRoutineAdmin(_Base, model=ResourceRoutine):
+    admin_summary = "Associate routines with resources that are allowed to run them."
+    # Composite-PK link table: sqladmin omits PK/FK columns from forms by
+    # default, so without relationship form fields the create page has no
+    # inputs. The viewonly relations on the model render as selects.
+    # Rows are immutable (delete + recreate instead of editing ids).
+    can_edit = False
     column_list = ["resource_id", "routine_id"]  # noqa: RUF012
     column_labels = {"resource_id": "resource", "routine_id": "routine"}  # noqa: RUF012
     column_formatters = {"resource_id": _fmt_resource, "routine_id": _fmt_routine}  # noqa: RUF012
+    form_columns = ["resource", "routine"]  # noqa: RUF012
+
+    async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        await super().on_model_change(data, model, is_created, request)
+        if is_created:
+            resource_id = _rel_id(data.get("resource", data.get("resource_id")))
+            routine_id = _rel_id(data.get("routine", data.get("routine_id")))
+            if resource_id is not None and routine_id is not None:
+                with _sync_session_factory()() as session:
+                    exists = session.execute(
+                        select(ResourceRoutine).where(
+                            ResourceRoutine.resource_id == resource_id,
+                            ResourceRoutine.routine_id == routine_id,
+                        )
+                    ).scalar_one_or_none()
+                if exists is not None:
+                    raise ValueError("This routine is already associated with this resource.")
 
 
 class ResourceGroupAdmin(_Base, model=ResourceGroup):
+    admin_summary = "Organize resources into reusable groups."
     column_list = ["id", "name", "description"]  # noqa: RUF012
     column_searchable_list = ["name"]  # noqa: RUF012
 
 
 class ResourceGroupMemberAdmin(_Base, model=ResourceGroupMember):
+    admin_summary = "Add resources to, or remove them from, resource groups."
+    # Same composite-PK treatment as ResourceRoutineAdmin: relationship
+    # selects for create, immutable rows (delete + recreate to change).
+    can_edit = False
     column_list = ["group_id", "resource_id"]  # noqa: RUF012
     column_labels = {"group_id": "group", "resource_id": "resource"}  # noqa: RUF012
     column_formatters = {"group_id": _fmt_group, "resource_id": _fmt_resource}  # noqa: RUF012
+    form_columns = ["group", "resource"]  # noqa: RUF012
+
+    async def on_model_change(self, data: dict[str, Any], model: Any, is_created: bool, request: Request) -> None:
+        await super().on_model_change(data, model, is_created, request)
+        if is_created:
+            group_id = _rel_id(data.get("group", data.get("group_id")))
+            resource_id = _rel_id(data.get("resource", data.get("resource_id")))
+            if group_id is not None and resource_id is not None:
+                with _sync_session_factory()() as session:
+                    exists = session.execute(
+                        select(ResourceGroupMember).where(
+                            ResourceGroupMember.group_id == group_id,
+                            ResourceGroupMember.resource_id == resource_id,
+                        )
+                    ).scalar_one_or_none()
+                if exists is not None:
+                    raise ValueError("This resource is already a member of this group.")
 
 
 class GroupAssignmentAdmin(_Base, model=GroupAssignment):
+    admin_summary = "Give users or roles access to resource groups."
     column_list = ["id", "group_id", "principal_type", "principal_id", "created_by"]  # noqa: RUF012
     column_labels = {"group_id": "group", "principal_type": "type", "principal_id": "principal", "created_by": "created by"}  # noqa: RUF012
     column_formatters = {"group_id": _fmt_group, "principal_id": _fmt_principal, "created_by": _fmt_created_by}  # noqa: RUF012
@@ -411,6 +506,7 @@ class GroupAssignmentAdmin(_Base, model=GroupAssignment):
 
 
 class RoutineGrantAdmin(_Base, model=RoutineGrant):
+    admin_summary = "Grant selected principals permission to view or use specific routines."
     column_list = ["id", "routine_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
     column_labels = {"routine_id": "routine", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
     column_formatters = {"routine_id": _fmt_routine, "principal_id": _fmt_principal}  # noqa: RUF012
@@ -418,6 +514,7 @@ class RoutineGrantAdmin(_Base, model=RoutineGrant):
 
 
 class ResourceGrantAdmin(_Base, model=ResourceGrant):
+    admin_summary = "Grant selected principals permission to view or use a resource or group."
     column_list = ["id", "resource_id", "group_id", "principal_type", "principal_id", "can_view", "can_use"]  # noqa: RUF012
     column_labels = {"resource_id": "resource", "group_id": "group", "principal_type": "type", "principal_id": "principal"}  # noqa: RUF012
     column_formatters = {"resource_id": _fmt_resource, "group_id": _fmt_group, "principal_id": _fmt_principal}  # noqa: RUF012
@@ -425,11 +522,13 @@ class ResourceGrantAdmin(_Base, model=ResourceGrant):
 
 
 class ExecutionModeAdmin(_Base, model=ExecutionMode):
+    admin_summary = "Define dispatch modes such as direct, scheduler, or voucher."
     column_list = ["id", "code", "description"]  # noqa: RUF012
     column_searchable_list = ["code"]  # noqa: RUF012
 
 
 class RoutineUsageAdmin(_Base, model=RoutineUsage):
+    admin_summary = "Review routine dispatch requests, their targets, mode, status, and schedule."
     column_list = ["id", "routine_id", "resource_id", "requested_by", "mode_id", "status", "external_dispatch_id", "cron", "use_count", "created_at"]  # noqa: RUF012
     column_labels = {"routine_id": "routine", "resource_id": "resource", "requested_by": "requested by", "mode_id": "mode", "external_dispatch_id": "dispatch id", "use_count": "uses"}  # noqa: RUF012
     column_formatters = {"routine_id": _fmt_routine, "resource_id": _fmt_resource, "requested_by": _fmt_requested_by, "mode_id": _fmt_mode}  # noqa: RUF012
@@ -532,9 +631,17 @@ _VIEWS = [
 
 def setup_admin(app: FastAPI) -> None:
     """Create sync engine for the admin + mount sqladmin at /admin."""
+    from pathlib import Path
+
     url = get_settings().DATABASE_URL.replace("sqlite+aiosqlite://", "sqlite://")
     engine = create_engine(url, connect_args={"check_same_thread": False})
-    admin = Admin(app, engine, authentication_backend=AdminAuth(secret_key=get_settings().JWT_SECRET))
+    templates_dir = str(Path(__file__).resolve().parents[2] / "templates")
+    admin = Admin(
+        app,
+        engine,
+        authentication_backend=AdminAuth(secret_key=get_settings().JWT_SECRET),
+        templates_dir=templates_dir,
+    )
     for view in _VIEWS:
         admin.add_view(view)
     admin.add_view(DocsLinkView)
