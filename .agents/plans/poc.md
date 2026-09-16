@@ -316,4 +316,4 @@ Mermaid version to be saved in `docs/ER.md` in Stage 0/8 (same entities, `erDiag
 
 ---
 
-*End of plan. Awaiting user start signal — no implementation performed in this step.*
+_End of plan. Awaiting user start signal — no implementation performed in this step._
