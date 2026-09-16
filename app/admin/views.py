@@ -126,6 +126,16 @@ class _Base(ModelView):
     # in sqladmin's _build_column_list).
     form_excluded_columns = ["created_at", "updated_at", "received_at"]  # noqa: RUF012
 
+    def get_form_columns(self) -> list[str]:
+        # Inverse collections (one-to-many / many-to-many with uselist=True)
+        # auto-render as multi-selects (e.g. MetadataType.entries,
+        # ResourceType.resources). They are managed from the owning side or
+        # dedicated association views, so never show them in forms. Scalar
+        # (many-to-one / one-to-one) relationship selects are preserved.
+        columns = super().get_form_columns()
+        relationships = self._mapper.relationships
+        return [name for name in columns if name not in relationships or not relationships[name].uselist]
+
     async def list_context(self, request: Request) -> dict[str, Any]:
         return {"admin_summary": self.admin_summary}
 
@@ -279,7 +289,9 @@ class UserAdmin(_Base, model=User):
     column_details_exclude_list = ["hashed_password"]  # noqa: RUF012
     # hashed_password is exposed as a write-only password input and
     # bcrypt-hashed in on_model_change below. Blank on edit keeps old hash.
-    form_columns = ["username", "email", "roles", "is_superuser", "is_active", "hashed_password"]  # noqa: RUF012
+    # Roles are assigned via the UserRole view, not inline (collections are
+    # excluded from all admin forms by _Base.get_form_columns).
+    form_columns = ["username", "email", "is_superuser", "is_active", "hashed_password"]  # noqa: RUF012
     form_overrides = {"hashed_password": PasswordField}  # noqa: RUF012
     form_args = {"hashed_password": {"label": "Password", "validators": [Optional(), Length(min=4, max=128)]}}  # noqa: RUF012
 

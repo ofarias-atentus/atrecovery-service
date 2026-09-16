@@ -75,3 +75,18 @@ def test_admin_lists_start_with_id():
         ResourceGrantAdmin, ExecutionModeAdmin, RoutineUsageAdmin,
     ):
         assert view.column_list[0] == "id", view.__name__
+
+
+def test_admin_forms_exclude_collection_relationships():
+    """No create/edit form may include a uselist (collection) relationship."""
+    from app.admin.views import _VIEWS, ResourceGroupMemberAdmin, ResourceRoutineAdmin
+
+    for view in _VIEWS:
+        inst = view()
+        relationships = inst._mapper.relationships
+        bad = [name for name in inst.get_form_columns() if name in relationships and relationships[name].uselist]
+        assert bad == [], f"{view.__name__}: {bad}"
+
+    # Scalar association selects must survive the filter.
+    assert ResourceRoutineAdmin().get_form_columns() == ["resource", "routine"]
+    assert ResourceGroupMemberAdmin().get_form_columns() == ["group", "resource"]
