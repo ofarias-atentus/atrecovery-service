@@ -32,3 +32,7 @@
 ## UI DESIGN
 
 - Nothing at the moment.
+
+## MISC
+
+- Update DESIGN.md file if needed.
