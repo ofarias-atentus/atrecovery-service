@@ -31,8 +31,8 @@ uvicorn app.main:app --reload
 - `app/api/v1/`: async REST routers, grouped by domain.
 - `app/models/`: SQLAlchemy ORM models.
 - `app/schemas/`: Pydantic request and response models.
-- `app/services/`: domain logic for authorization, validation, activity, and
-  routine usage.
+- `app/services/`: domain logic for authorization, validation, activity,
+  routine usage, and bulk resource import (`resource_import.py`).
 - `app/core/`: settings, dependencies, security, logging, and time helpers.
 - `app/db/`: declarative base, async session lifecycle, and idempotent seed.
 - `app/admin/`: sqladmin configuration and access controls.
@@ -52,6 +52,16 @@ uvicorn app.main:app --reload
   100.
 - Validate routine content, resource data, and resource metadata against their
   configured JSON schemas before persistence.
+- Route bulk resource imports through `app/services/resource_import.py` so the
+  CSV API, JSON API, and admin UI share validation. Imports are atomic:
+  validate every row first, upsert by `Resource.identifier == device_id`, and
+  roll back the whole file on any row error.
+- For imports, require active `mobile_device` and `monitor` types, normalize
+  timestamps to naive UTC strings and `activo` to boolean, and store an empty
+  `servidor_log` as `""`. Respect the CSV limits (2 MiB, 1000 rows) and the
+  exact required header set.
+- Declare static resource routes such as `/import/csv` and `/import/json`
+  before `/{resource_id}` so the dynamic route does not capture them.
 - Use `is_active` soft deactivation where the existing domain keeps historical
   records, rather than deleting referenced data.
 - Use `app.core.time.utcnow_naive()` for persisted/domain timestamps. JWT
@@ -65,6 +75,9 @@ uvicorn app.main:app --reload
 - RBAC and object-level grants are deny-by-default. Preserve both the coarse
   permission check and the applicable routine/resource grant check.
 - Do not weaken admin-only, processor-token, or read-only audit-log controls.
+  Bulk resource import is admin-only: REST endpoints must use `require_admin()`,
+  and the `/admin/resource-import` view relies on the existing `AdminAuth`
+  session guard.
 - Never return or log password hashes, raw processor tokens, JWT secrets, or
   other credentials. Processor tokens are shown once, stored hashed, and
   compared in constant time.
