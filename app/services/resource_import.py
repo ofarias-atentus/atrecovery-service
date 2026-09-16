@@ -209,7 +209,7 @@ def normalize_row(raw: dict[str, Any], *, row: int, source: str) -> dict[str, An
     descripcion = _require_text(raw, "descripcion", row=row, source=source, allow_empty=True)
     hostname = _require_text(raw, "hostname", row=row, source=source)
     host = _require_text(raw, "replic_dbhost", row=row, source=source)
-    servidor_log = _require_text(raw, "servidor_log", row=row, source=source)
+    servidor_log = _require_text(raw, "servidor_log", row=row, source=source, allow_empty=True)
     source_id = _require_text(raw, "id", row=row, source=source)
 
     data = {

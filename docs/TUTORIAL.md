@@ -137,7 +137,8 @@ Mapping: `device_id` becomes the resource identifier/`data.udid`;
 `platform_version`, `device_descripcion`, and both timestamps land in
 resource `data`; `monitor_id`, `nodo_id`, `nombre`, `descripcion`,
 `hostname`, `replic_dbhost`, `servidor_log`, and source `id` land in the
-`monitor` metadata entry. `activo` sets `is_active`.
+`monitor` metadata entry. `activo` sets `is_active`. `servidor_log` may be
+empty and is stored as `""`.
 
 Behavior: existing `device_id` values are updated (resource plus monitor
 entry); missing values are created. Any invalid row rolls back the whole

@@ -220,6 +220,19 @@ async def test_missing_metadata_field_rejected(client):
     assert await _resource_by_identifier(client, h, "RFGYC356WTJ") is None
 
 
+async def test_empty_servidor_log_stored_as_empty_string(client):
+    h = await _admin(client)
+    row = dict(JSON_ROW)
+    row["servidor_log"] = "   "
+    r = await client.post(
+        "/api/v1/resources/import/json", headers=h, json={"rows": [row]}
+    )
+    assert r.status_code == 201, r.text
+    got = await _resource_by_identifier(client, h, "RFGYC356WTJ")
+    assert got is not None
+    assert got["metadata"][0]["data"]["servidor_log"] == ""
+
+
 async def test_inactive_type_rejected(client):
     h = await _admin(client)
     types = (await client.get("/api/v1/metadata-types", headers=h)).json()
