@@ -18,11 +18,11 @@ use-grant on; execution itself stays ``POST /usages`` with a mandatory
 Read: resource:view code + object grant (direct or via granted group).
 Write: resource:manage. DELETE is a soft deactivate (is_active=False).
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_permission
+from app.core.deps import get_current_user, require_admin, require_permission
 from app.db.session import get_db
 from app.models.catalog import Routine
 from app.models.identity import User
@@ -36,6 +36,8 @@ from app.models.resources import (
 from app.schemas.catalog import RoutineRead
 from app.schemas.resources import (
     ResourceCreate,
+    ResourceImportRequest,
+    ResourceImportResult,
     ResourceMetadataCreate,
     ResourceMetadataRead,
     ResourceMetadataUpdate,
@@ -43,17 +45,62 @@ from app.schemas.resources import (
     ResourceUpdate,
     RoutineAttach,
 )
+from app.services.activity import client_ip
 from app.services.rbac import (
     granted_routine_ids,
     require_resource_access,
     resource_access_map,
 )
+from app.services.resource_import import import_rows, parse_csv_text
 from app.services.validation import validate_json_data
 
 router = APIRouter()
 VIEW = require_permission("resource:view")
 MANAGE = require_permission("resource:manage")
+ADMIN = require_admin()
 VIEW_GRANT = require_resource_access("view")
+
+
+@router.post(
+    "/import/csv",
+    response_model=ResourceImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Bulk import resources + monitor metadata from CSV (admin only)",
+)
+async def import_resources_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
+) -> ResourceImportResult:
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as e:
+        raise HTTPException(status_code=422, detail="csv: file must be UTF-8") from e
+    rows = parse_csv_text(text, source="csv")
+    result = await import_rows(
+        db, rows, source="csv", user_id=user.id, ip=client_ip(request)
+    )
+    return ResourceImportResult(**result)
+
+
+@router.post(
+    "/import/json",
+    response_model=ResourceImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Bulk import resources + monitor metadata from JSON rows (admin only)",
+)
+async def import_resources_json(
+    body: ResourceImportRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(ADMIN),
+) -> ResourceImportResult:
+    result = await import_rows(
+        db, body.rows, source="json", user_id=user.id, ip=client_ip(request)
+    )
+    return ResourceImportResult(**result)
 
 
 def _meta_to_read(m: ResourceMetadata) -> ResourceMetadataRead:

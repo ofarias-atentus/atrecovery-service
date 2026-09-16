@@ -18,6 +18,7 @@ ROUTINE_USE = "routine.use"
 BEACON_RECEIVED = "beacon.received"
 GRANT_CHANGED = "grant.changed"
 GROUP_CHANGED = "group.changed"
+RESOURCE_IMPORTED = "resource.imported"
 
 
 def client_ip(request: Request | None) -> str | None:
