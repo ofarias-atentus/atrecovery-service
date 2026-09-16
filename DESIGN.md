@@ -1,4 +1,4 @@
-# AGENTS.md
+# DESIGN.md
 
 ## Project Overview
 
@@ -48,8 +48,7 @@ uvicorn app.main:app --reload
 - Keep domain changes aligned across model, schema, service, router, seed, and
   tests. Use separate Create, Update, and Read schemas and explicit
   `response_model` declarations.
-- Preserve list pagination with `limit` and `offset`; `limit` must not exceed
-  100.
+- Preserve list pagination with `limit` and `offset`; `limit` must not exceed 100.
 - Validate routine content, resource data, and resource metadata against their
   configured JSON schemas before persistence.
 - Route bulk resource imports through `app/services/resource_import.py` so the
