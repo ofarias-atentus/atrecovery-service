@@ -1,4 +1,4 @@
-# DESIGN.md
+# ARCHITECTURE.md
 
 ## Project Overview
 
